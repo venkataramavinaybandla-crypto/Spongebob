@@ -28,6 +28,15 @@ SUMMARY_POOL: tuple[str, ...] = (
     "Bubbles up! The flow wrapped with {value} deliveries!",
 )
 
+DIAGNOSE_SUMMARY_POOL: tuple[str, ...] = (
+    "Live reef check done! {value} probes made the round trip without getting lost at sea!",
+    "Diagnose swim complete—{value} round-trip replies surfaced from the far shore!",
+    "Probe patrol reporting back: {value} handshakes came home safely!",
+    "My antennae tallied the live tide: {value} probes completed the round trip!",
+    "End of the live check! {value} probes bounced back across the reef!",
+    "Flipper-count complete! {value} probes answered the knock on the ocean floor!",
+)
+
 DROP_REASON_POOLS: dict[str, tuple[str, ...]] = {
     "random": (
         "Oops! A stray current at {hop} gently misplaced {value} packets—totally normal reef weather!",
@@ -52,6 +61,16 @@ DROP_REASON_POOLS: dict[str, tuple[str, ...]] = {
         "Full house at {hop}! {value} latecomers had to turn around!",
         "The bottle-neck at {hop} backed up and tail-dropped {value} packets!",
         "No more standing room at {hop}—{value} packets were politely turned away!",
+    ),
+    "timeout": (
+        "Crickets on the reef! {hop} left {value} probes knocking with no reply before the bell!",
+        "Knock-knock at {hop}—{value} probes waited until the tide clock ran out!",
+        "No wave back from {hop}: {value} probes timed out in the deep blue!",
+        "The seashell phone at {hop} rang and rang—{value} probes timed out!",
+        "Radio silence near {hop}! {value} probes never heard a bubble back in time!",
+        "Sleepy currents at {hop} let {value} probes time out without a handshake!",
+        "Still waiting on {hop}—{value} probes swam past the timeout buoy!",
+        "Ghost town at {hop}! {value} probes got zero answer before the whistle blew!",
     ),
 }
 
@@ -216,6 +235,7 @@ class Narrator:
         metrics: Any | None,
         events: Sequence[Any] | None = None,
         seed: int | None = None,
+        mode: str = "simulate",
     ) -> list[Line]:
         """Produce mascot narration lines for findings, drop reasons, and summary."""
         rng = random.Random(seed)
@@ -273,7 +293,10 @@ class Narrator:
         if metrics is not None:
             delivered = getattr(metrics, "delivered", 0)
             sent = getattr(metrics, "sent", 0)
-            summary_tmpl = self._pick("summary", SUMMARY_POOL, rng)
+            if mode == "diagnose":
+                summary_tmpl = self._pick("diagnose_summary", DIAGNOSE_SUMMARY_POOL, rng)
+            else:
+                summary_tmpl = self._pick("summary", SUMMARY_POOL, rng)
             lines.append(
                 Line(
                     text=summary_tmpl.format(hop="the path", value=f"{delivered}/{sent}"),
@@ -290,6 +313,7 @@ def narrate(
     metrics: Any | None,
     events: Sequence[Any] | None = None,
     seed: int | None = None,
+    mode: str = "simulate",
 ) -> list[Line]:
     """Stateless convenience wrapper around Narrator.narrate()."""
-    return Narrator().narrate(findings, metrics, events, seed=seed)
+    return Narrator().narrate(findings, metrics, events, seed=seed, mode=mode)

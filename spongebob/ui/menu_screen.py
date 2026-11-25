@@ -13,6 +13,7 @@ class MenuScreen(Screen[None]):
     BINDINGS = [
         Binding("s", "open_simulate", "Simulate"),
         Binding("v", "open_visualize", "Visualize"),
+        Binding("d", "open_diagnose", "Diagnose"),
         Binding("n", "toggle_narrator", "Narrator On/Off"),
         Binding("q", "quit_app", "Quit"),
     ]
@@ -50,10 +51,10 @@ class MenuScreen(Screen[None]):
         with Center():
             with Vertical(id="menu-box"):
                 yield Static("Spongebob", id="menu-title")
-                yield Static("Network Impairment Simulator", id="menu-subtitle")
+                yield Static("Network Impairment Simulator — v0.2.0", id="menu-subtitle")
                 yield Button("Simulate", id="btn-simulate", variant="primary")
                 yield Button("Visualize", id="btn-visualize", variant="default")
-                yield Button("Diagnose (v0.2)", id="btn-diagnose", disabled=True)
+                yield Button("Diagnose", id="btn-diagnose", variant="default")
                 yield Button("Settings: Narrator ON", id="btn-narrator-toggle", variant="default")
                 yield Button("Quit", id="btn-quit", variant="error")
         yield Footer()
@@ -72,6 +73,8 @@ class MenuScreen(Screen[None]):
             self.action_open_simulate()
         elif btn_id == "btn-visualize":
             self.action_open_visualize()
+        elif btn_id == "btn-diagnose":
+            self.action_open_diagnose()
         elif btn_id == "btn-narrator-toggle":
             self.action_toggle_narrator()
         elif btn_id == "btn-quit":
@@ -86,6 +89,9 @@ class MenuScreen(Screen[None]):
 
     def action_open_visualize(self) -> None:
         self.app.open_visualize()  # type: ignore[attr-defined]
+
+    def action_open_diagnose(self) -> None:
+        self.app.open_diagnose()  # type: ignore[attr-defined]
 
     def action_quit_app(self) -> None:
         self.app.exit()

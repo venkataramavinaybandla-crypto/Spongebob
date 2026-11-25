@@ -161,15 +161,23 @@ async def test_narrator_toggle_in_menu_session_only() -> None:
 
 def test_privacy_guard_no_network_imports_or_file_writes_in_src() -> None:
     src_root = Path("spongebob")
+    allowed_network_file = Path("spongebob", "diagnose", "probes.py")
+    allowed_in_probes = {"socket"}
+
     for py_file in src_root.rglob("*.py"):
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        is_probes = py_file == allowed_network_file
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     top = alias.name.split(".")[0]
+                    if is_probes and top in allowed_in_probes:
+                        continue
                     assert top not in NETWORK_MODULES, f"Network import {top} in {py_file}"
             elif isinstance(node, ast.ImportFrom) and node.module:
                 top = node.module.split(".")[0]
+                if is_probes and top in allowed_in_probes:
+                    continue
                 assert top not in NETWORK_MODULES, f"Network import {top} in {py_file}"
             elif isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name) and node.func.id == "open":

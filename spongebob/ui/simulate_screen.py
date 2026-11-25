@@ -244,6 +244,7 @@ class SimulateScreen(Screen[None]):
         findings = analyze(events, path)
 
         self.app.last_run = (path, events, metrics, findings)  # type: ignore[attr-defined]
+        self.app.last_run_latency_kind = "one_way"  # type: ignore[attr-defined]
         self._has_results = True
         self.query_one("#btn-open-visualize", Button).disabled = False
 

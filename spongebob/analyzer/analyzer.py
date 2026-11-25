@@ -10,9 +10,11 @@ from spongebob.engine.models import Event, Hop
 from spongebob.meter import measure
 
 Severity = Literal["critical", "warn", "info"]
+LatencyKind = Literal["one_way", "rtt"]
 
 THRESHOLDS: dict[str, dict[str, float]] = {
     "HIGH_DELAY": {"warn": 150.0, "critical": 400.0},
+    "HIGH_DELAY_RTT": {"warn": 300.0, "critical": 800.0},
     "HIGH_JITTER": {"warn": 30.0, "critical": 75.0},
     "PACKET_LOSS": {"warn": 1.0, "critical": 5.0},
     "BURST_LOSS": {"warn": 3.0, "critical": 8.0},
@@ -54,13 +56,21 @@ def _longest_consecutive_run(seqs: list[int]) -> int:
     return longest
 
 
-def analyze(events: Iterable[Event], path: Iterable[Hop]) -> list[Finding]:
-    """Analyze simulation events against a path and return findings sorted by severity."""
+def analyze(
+    events: Iterable[Event],
+    path: Iterable[Hop],
+    latency_kind: LatencyKind = "one_way",
+) -> list[Finding]:
+    """Analyze simulation or probe events against a path and return findings sorted by severity."""
+    if latency_kind not in ("one_way", "rtt"):
+        raise ValueError(f"latency_kind must be 'one_way' or 'rtt', got {latency_kind!r}")
+
     event_list = list(events)
     path_list = list(path)
     if not event_list or not path_list:
         return []
 
+    is_rtt = latency_kind == "rtt"
     metrics = measure(event_list)
     findings: list[Finding] = []
 
@@ -82,7 +92,7 @@ def analyze(events: Iterable[Event], path: Iterable[Hop]) -> list[Finding]:
     # 1. HIGH_DELAY (path-level)
     if metrics.latency_ms is not None:
         avg_delay = metrics.latency_ms.avg
-        t_delay = THRESHOLDS["HIGH_DELAY"]
+        t_delay = THRESHOLDS["HIGH_DELAY_RTT"] if is_rtt else THRESHOLDS["HIGH_DELAY"]
         if avg_delay > t_delay["critical"]:
             findings.append(
                 Finding("HIGH_DELAY", "critical", None, avg_delay, t_delay["critical"])
@@ -168,46 +178,47 @@ def analyze(events: Iterable[Event], path: Iterable[Hop]) -> list[Finding]:
                 )
             )
 
-        queue_full_drops = sum(1 for e in hop_drops if e.reason == "queue_full")
-        queue_full_pct = (queue_full_drops / arrivals * 100.0) if arrivals > 0 else 0.0
-        hop_depths = depths_by_hop.get(hop.name, [])
-        avg_depth = (sum(hop_depths) / len(hop_depths)) if hop_depths else 0.0
+        if not is_rtt:
+            queue_full_drops = sum(1 for e in hop_drops if e.reason == "queue_full")
+            queue_full_pct = (queue_full_drops / arrivals * 100.0) if arrivals > 0 else 0.0
+            hop_depths = depths_by_hop.get(hop.name, [])
+            avg_depth = (sum(hop_depths) / len(hop_depths)) if hop_depths else 0.0
 
-        if queue_full_pct > t_bw["drop_pct_critical"]:
-            findings.append(
-                Finding(
-                    "BANDWIDTH_CHOKE",
-                    "critical",
-                    hop.name,
-                    queue_full_pct,
-                    t_bw["drop_pct_critical"],
+            if queue_full_pct > t_bw["drop_pct_critical"]:
+                findings.append(
+                    Finding(
+                        "BANDWIDTH_CHOKE",
+                        "critical",
+                        hop.name,
+                        queue_full_pct,
+                        t_bw["drop_pct_critical"],
+                    )
                 )
-            )
-        elif queue_full_drops > 0:
-            findings.append(
-                Finding(
-                    "BANDWIDTH_CHOKE",
-                    "warn",
-                    hop.name,
-                    float(queue_full_drops),
-                    1.0,
+            elif queue_full_drops > 0:
+                findings.append(
+                    Finding(
+                        "BANDWIDTH_CHOKE",
+                        "warn",
+                        hop.name,
+                        float(queue_full_drops),
+                        1.0,
+                    )
                 )
-            )
-        elif avg_depth > t_bw["queue_depth_warn"]:
-            findings.append(
-                Finding(
-                    "BANDWIDTH_CHOKE",
-                    "warn",
-                    hop.name,
-                    avg_depth,
-                    t_bw["queue_depth_warn"],
+            elif avg_depth > t_bw["queue_depth_warn"]:
+                findings.append(
+                    Finding(
+                        "BANDWIDTH_CHOKE",
+                        "warn",
+                        hop.name,
+                        avg_depth,
+                        t_bw["queue_depth_warn"],
+                    )
                 )
-            )
 
         arrivals = max(0, arrivals - drop_count)
 
-    # 6. REORDERING (path-level)
-    if metrics.delivered > 0:
+    # 6. REORDERING (path-level, not observable in RTT probe mode)
+    if not is_rtt and metrics.delivered > 0:
         reorder_pct = (metrics.reordered / metrics.delivered) * 100.0
         t_reorder = THRESHOLDS["REORDERING"]
         if reorder_pct > t_reorder["critical"]:

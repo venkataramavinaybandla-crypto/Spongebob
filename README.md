@@ -47,6 +47,7 @@ CLI flags and headless module runners:
 ```bash
 spongebob --version
 spongebob --help
+spongebob diagnose <host> [--port 443] [--count 20] [--interval-ms 200] [--dns]
 python -m spongebob
 python -m spongebob.engine
 python -m spongebob.meter
@@ -63,9 +64,26 @@ pytest -v
 
 ## Screens
 
-- **Menu:** Keyboard-first launcher for **Simulate**, **Visualize**, **Diagnose (`v0.2`, disabled)**, **Settings: Narrator ON/OFF** (session-only), and **Quit**.
+- **Menu:** Keyboard-first launcher for **Simulate**, **Visualize**, **Diagnose**, **Settings: Narrator ON/OFF** (session-only), and **Quit**.
 - **Simulate:** Edit flow settings (packet count, interval, size, seed) and per-hop impairments (`client`, `router`, `isp`, `server`) with live validation. Displays measured metrics, severity-colored findings pinned to the responsible hop, and mascot narration. Press `V` from results to open **Visualize** with that run.
-- **Visualize:** Full-terminal Braille living-pipe animation replaying events through the synchronous event bus, with bandwidth bottlenecks, queue pileups, distinct drop shatter effects, live telemetry, and a diagnostic scan pulse that stalls at the highest-severity hop. Controls: `Space` pause/resume, `+`/`-` speed (`0.25x`–`8x`), `R` restart, `P` pulse, `Esc` back.
+- **Diagnose:** Configure a single target host, port, probe count, interval, and optional DNS check, confirm consent, and inspect live RTT metrics, segment-pinned findings, mascot narration, and non-loss errors. Press `V` from results to open **Visualize** in RTT mode.
+- **Visualize:** Full-terminal Braille living-pipe animation replaying events through the synchronous event bus, with bandwidth bottlenecks, queue pileups, distinct drop effects (including silent fade-out for probe timeouts), live telemetry, and a diagnostic scan pulse that stalls at the highest-severity hop. Controls: `Space` pause/resume, `+`/`-` speed (`0.25x`–`8x`), `R` restart, `P` pulse, `Esc` back.
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## Diagnose Mode
+
+Diagnose mode probes a single user-supplied target using bounded TCP connect timing (and optional system DNS resolution) and feeds the resulting samples into the same meter, analyzer, narrator, and visualizer pipeline.
+
+- **How to run:** Choose **Diagnose** from the main menu, or run `spongebob diagnose <host> [--port 443] [--count 20] [--interval-ms 200] [--dns]`.
+- **What it contacts:** Only the target host and single port you type in, and only after you explicitly confirm the consent prompt (`y`).
+- **Honest limits:**
+  - Measures **round-trip time (RTT)**, not one-way delay.
+  - TCP connect timeouts **approximate packet loss**; they are not exact packet loss.
+  - `BANDWIDTH_CHOKE` and `REORDERING` findings are skipped (not observable from connect probes).
+  - Throughput is reported as `n/a` (no application data is sent).
+  - Safety limits enforced: single target, single port (`1-65535`), count capped at `200`, minimum interval `100 ms`, timeout `100-5000 ms`, and early abort after `3` consecutive non-loss errors (`refused`, `unreachable`, `dns_error`).
+  - Nothing is saved to disk, no history is kept, and every run requires explicit confirmation.
 
 <img src="assets/divider.svg" alt="" width="100%">
 
@@ -93,8 +111,6 @@ Spongebob aims for maximum practical privacy rather than making an "absolute" pr
 
 ## Roadmap
 
-- **v0.1 (current):** Discrete-event engine, meter, synchronous event bus, rule-based analyzer, Textual UI + Braille visualizer, and rule-based mascot narrator.
-- **v0.2:** Diagnose mode (probing user-supplied targets).
 - **v0.3:** Scenario files, export, and plugins.
 
 <img src="assets/divider.svg" alt="" width="100%">

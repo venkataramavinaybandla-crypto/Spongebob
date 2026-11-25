@@ -30,7 +30,7 @@ class Metrics:
     jitter_ms: float | None
     jitter_mean_abs_ms: float | None
     reordered: int
-    throughput_kbps: float
+    throughput_kbps: float | None
 
 
 def _percentile_95(sorted_values: list[float]) -> float:
@@ -47,8 +47,8 @@ def _percentile_95(sorted_values: list[float]) -> float:
 
 def measure(events: Iterable[Event], packet_size_bytes: int = 64) -> Metrics:
     """Compute delivery, loss, latency, jitter, reordering, and throughput metrics."""
-    if isinstance(packet_size_bytes, bool) or not isinstance(packet_size_bytes, int) or packet_size_bytes <= 0:
-        raise ValueError(f"packet_size_bytes must be a positive integer, got {packet_size_bytes}")
+    if isinstance(packet_size_bytes, bool) or not isinstance(packet_size_bytes, int) or packet_size_bytes < 0:
+        raise ValueError(f"packet_size_bytes must be a non-negative integer, got {packet_size_bytes}")
 
     sent = 0
     delivered_events: list[Event] = []
@@ -81,7 +81,7 @@ def measure(events: Iterable[Event], packet_size_bytes: int = 64) -> Metrics:
             jitter_ms=None,
             jitter_mean_abs_ms=None,
             reordered=0,
-            throughput_kbps=0.0,
+            throughput_kbps=None if packet_size_bytes == 0 else 0.0,
         )
 
     delivered_events.sort(key=lambda e: e.time_ms)
@@ -118,7 +118,9 @@ def measure(events: Iterable[Event], packet_size_bytes: int = 64) -> Metrics:
             max_seq_seen = event.seq
 
     last_delivery_time_ms = delivered_events[-1].time_ms
-    if first_send_time_ms is not None and last_delivery_time_ms > first_send_time_ms:
+    if packet_size_bytes == 0:
+        throughput_kbps: float | None = None
+    elif first_send_time_ms is not None and last_delivery_time_ms > first_send_time_ms:
         duration_ms = last_delivery_time_ms - first_send_time_ms
         throughput_kbps = (delivered * packet_size_bytes * 8.0) / duration_ms
     else:

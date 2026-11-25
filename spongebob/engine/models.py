@@ -6,7 +6,7 @@ from typing import Literal
 
 JitterModel = Literal["uniform", "normal"]
 LossModel = Literal["random", "gilbert"]
-DropReason = Literal["random", "burst", "queue_full"]
+DropReason = Literal["random", "burst", "queue_full", "timeout"]
 EventType = Literal[
     "packet_sent",
     "packet_delayed",

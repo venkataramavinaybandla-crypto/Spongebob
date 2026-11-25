@@ -11,7 +11,7 @@ from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
-from spongebob.analyzer import Finding
+from spongebob.analyzer import Finding, LatencyKind
 from spongebob.bus import EventBus
 from spongebob.engine.models import Event, Hop
 from spongebob.narrator import MASCOT_NAME, Line
@@ -73,6 +73,7 @@ class VisualizeScreen(Screen[None]):
         findings: Sequence[Finding],
         narrator_lines: Sequence[Line] = (),
         narrator_enabled: bool = True,
+        latency_kind: LatencyKind = "one_way",
     ) -> None:
         super().__init__()
         self._path = list(path)
@@ -81,6 +82,7 @@ class VisualizeScreen(Screen[None]):
         self._findings = list(findings)
         self._narrator_lines = list(narrator_lines)
         self._narrator_enabled = narrator_enabled
+        self._latency_kind: LatencyKind = latency_kind
         self._max_time_ms = max((e.time_ms for e in self._events), default=0.0)
         self._pulse_target = select_pulse_target(self._findings, self._hop_names)
         self._truecolor = detect_truecolor()
@@ -189,14 +191,16 @@ class VisualizeScreen(Screen[None]):
         num_hops = max(1, len(self._path))
 
         state = compute_replay_state(self._replayed_events, self._hop_names, self._t_ms)
+        is_rtt = self._latency_kind == "rtt"
 
-        # Draw living pipe walls (narrowing at bandwidth-capped hops)
+        # Draw living pipe walls (narrowing at bandwidth-capped hops in simulation mode)
         for x in range(2, pw - 2):
             x_norm = x / max(1, pw - 1)
             hop_idx = min(num_hops - 1, int(x_norm * num_hops))
             hop = self._path[hop_idx]
-            half_h = max(2, pipe_half // 2) if hop.bandwidth_kbps is not None else pipe_half
-            wall_color = (56, 189, 248) if hop.bandwidth_kbps is None else (245, 158, 11)
+            show_bw = (not is_rtt) and (hop.bandwidth_kbps is not None)
+            half_h = max(2, pipe_half // 2) if show_bw else pipe_half
+            wall_color = (245, 158, 11) if show_bw else (56, 189, 248)
             canvas.set_pixel(x, mid_y - half_h, wall_color)
             canvas.set_pixel(x, mid_y + half_h, wall_color)
 
@@ -213,11 +217,12 @@ class VisualizeScreen(Screen[None]):
                 node_color = (248, 113, 113)
             canvas.draw_circle(hx, mid_y, 2, node_color)
 
-            q_depth = state.queue_depths.get(hop.name, 0)
-            for q in range(min(q_depth, 8)):
-                qx = max(2, hx - 4 - (q * 2))
-                qy = mid_y - pipe_half - 2 - (q % 3)
-                canvas.set_pixel(qx, qy, (251, 191, 36))
+            if not is_rtt:
+                q_depth = state.queue_depths.get(hop.name, 0)
+                for q in range(min(q_depth, 8)):
+                    qx = max(2, hx - 4 - (q * 2))
+                    qy = mid_y - pipe_half - 2 - (q % 3)
+                    canvas.set_pixel(qx, qy, (251, 191, 36))
 
         # Draw moving packet particles
         for p in state.particles:
@@ -226,11 +231,21 @@ class VisualizeScreen(Screen[None]):
             canvas.draw_circle(px, py, 1, (52, 211, 153))
             canvas.set_pixel(px - 2, py, (16, 185, 129))
 
-        # Draw drop shatter effects distinct by reason
+        # Draw drop effects distinct by reason
         for d in state.drops:
             hx = int(((d.hop_index + 0.5) / num_hops) * (pw - 6)) + 3
             spread = int((d.age_ms / 220.0) * 6) + 1
-            if d.reason == "queue_full":
+            if d.reason == "timeout":
+                # Silent fade-out with no shatter: reads as "never came back"
+                fade = max(0.0, 1.0 - (d.age_ms / 220.0))
+                color = (
+                    int(56 * fade + 6),
+                    int(189 * fade + 11),
+                    int(248 * fade + 20),
+                )
+                canvas.set_pixel(hx, mid_y, color)
+                canvas.set_pixel(hx + 1, mid_y, color)
+            elif d.reason == "queue_full":
                 color = (239, 68, 68)
                 for s in range(1, spread + 1):
                     canvas.set_pixel(hx - s, mid_y - s, color)
@@ -271,7 +286,7 @@ class VisualizeScreen(Screen[None]):
         # Update side readout
         lat_str = f"{state.latency_avg_ms:.1f} ms" if state.latency_avg_ms is not None else "N/A"
         jit_str = f"{state.jitter_ms:.1f} ms" if state.jitter_ms is not None else "N/A"
-        q_lines = "\n".join(f"  {name}: {state.queue_depths.get(name, 0)}" for name in self._hop_names)
+        lat_label = "RTT:      " if is_rtt else "Latency:  "
         readout = (
             f"LIVE TELEMETRY\n"
             f"t = {state.time_ms:.0f} / {self._max_time_ms:.0f} ms\n"
@@ -280,11 +295,14 @@ class VisualizeScreen(Screen[None]):
             f"Sent:      {state.sent}\n"
             f"Delivered: {state.delivered}\n"
             f"Lost:      {state.lost} ({state.loss_pct:.1f}%)\n"
-            f"Latency:   {lat_str}\n"
+            f"{lat_label} {lat_str}\n"
             f"Jitter:    {jit_str}\n"
-            f"Reordered: {state.reordered}\n\n"
-            f"Queue Depth:\n{q_lines}"
         )
+        if not is_rtt:
+            q_lines = "\n".join(
+                f"  {name}: {state.queue_depths.get(name, 0)}" for name in self._hop_names
+            )
+            readout += f"Reordered: {state.reordered}\n\nQueue Depth:\n{q_lines}"
         self.query_one("#readout-text", Static).update(readout)
 
     def _callout_text(self) -> str:
