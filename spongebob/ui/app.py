@@ -7,6 +7,7 @@ from spongebob.engine import Flow, Hop, default_path, simulate
 from spongebob.engine.models import Event
 from spongebob.meter import Metrics, measure
 from spongebob.narrator import Narrator
+from spongebob.ui import theme
 from spongebob.ui.diagnose_screen import DiagnoseScreen
 from spongebob.ui.menu_screen import MenuScreen
 from spongebob.ui.simulate_screen import SimulateScreen
@@ -17,7 +18,8 @@ class SimulatorApp(App[None]):
     """Terminal UI application for Spongebob (Network Impairment Simulator)."""
 
     TITLE = "Spongebob"
-    SUB_TITLE = "Network Impairment Simulator (v0.2.0)"
+    SUB_TITLE = "Network Impairment Simulator (v0.2.1)"
+    CSS = theme.BASE_THEME_CSS
 
     def __init__(self) -> None:
         super().__init__()

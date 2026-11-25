@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Static
+from textual.widgets import Button, Footer, Static
+
+from spongebob.ui import theme
 
 
 class MenuScreen(Screen[None]):
@@ -18,54 +21,106 @@ class MenuScreen(Screen[None]):
         Binding("q", "quit_app", "Quit"),
     ]
 
-    CSS = """
-    MenuScreen {
+    CSS = f"""
+    MenuScreen {{
+        layout: vertical;
+        background: {theme.BG};
+        color: {theme.CREAM};
+    }}
+    #menu-center {{
+        height: 1fr;
         align: center middle;
-    }
-    #menu-box {
-        width: 48;
+    }}
+    #menu-box {{
+        width: 56;
         height: auto;
-        border: round #38bdf8;
+        padding: 0 1;
+        background: {theme.BG};
+    }}
+    #menu-banner {{
+        background: {theme.BANNER_BLUE};
+        color: {theme.CREAM};
+        border: solid {theme.SIGNAL_GREEN};
         padding: 1 2;
-        background: #0f172a;
-    }
-    #menu-title {
+        margin-bottom: 1;
         text-align: center;
+    }}
+    #menu-mode-box {{
+        border: solid {theme.SIGNAL_GREEN};
+        padding: 0 1;
+        background: {theme.BG};
+        height: auto;
+    }}
+    #menu-mode-label {{
+        color: {theme.SIGNAL_GREEN};
         text-style: bold;
-        color: #38bdf8;
         margin-bottom: 1;
-    }
-    #menu-subtitle {
-        text-align: center;
-        color: #94a3b8;
-        margin-bottom: 1;
-    }
-    Button {
+    }}
+    #menu-mode-box Button {{
         width: 100%;
-        margin-bottom: 1;
-    }
+        margin-bottom: 0;
+        content-align: left middle;
+        padding: 0 1;
+    }}
+    #too-small {{
+        width: 100%;
+        height: 1fr;
+        content-align: center middle;
+        color: {theme.WARN_AMBER};
+        text-style: bold;
+        display: none;
+    }}
     """
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=False)
-        with Center():
+        yield theme.make_top_title("MAIN MENU")
+        yield theme.RedTopRule(classes="red-rule")
+        yield Static("Enlarge terminal (minimum 50x16 required).", id="too-small")
+        with Center(id="menu-center"):
             with Vertical(id="menu-box"):
-                yield Static("Spongebob", id="menu-title")
-                yield Static("Network Impairment Simulator — v0.2.0", id="menu-subtitle")
-                yield Button("Simulate", id="btn-simulate", variant="primary")
-                yield Button("Visualize", id="btn-visualize", variant="default")
-                yield Button("Diagnose", id="btn-diagnose", variant="default")
-                yield Button("Settings: Narrator ON", id="btn-narrator-toggle", variant="default")
-                yield Button("Quit", id="btn-quit", variant="error")
+                yield Static("", id="menu-banner")
+                with Vertical(id="menu-mode-box"):
+                    yield Static("SELECT MODE", id="menu-mode-label")
+                    yield Button("[S]  Simulate   (Delay, Jitter, Loss)", id="btn-simulate", variant="primary")
+                    yield Button("[V]  Visualize  (Live Pipe Replay)", id="btn-visualize")
+                    yield Button("[D]  Diagnose   (Live Target Probe)", id="btn-diagnose")
+                    yield Button("[N]  Settings: Narrator ON", id="btn-narrator-toggle")
+                    yield Button("[Q]  Quit", id="btn-quit", variant="error")
+        yield Static(theme.format_status_line("SYSTEM READY", 1.0), id="menu-status", classes="status-bar")
         yield Footer()
 
     def on_mount(self) -> None:
+        self._render_banner()
         self._sync_narrator_label()
+        self._check_size()
+
+    def on_resize(self) -> None:
+        self._check_size()
+
+    def _check_size(self) -> None:
+        too_small = self.query_one("#too-small", Static)
+        center = self.query_one("#menu-center", Center)
+        if self.size.width < 50 or self.size.height < 16:
+            too_small.styles.display = "block"
+            center.styles.display = "none"
+        else:
+            too_small.styles.display = "none"
+            center.styles.display = "block"
+
+    def _render_banner(self) -> None:
+        banner = Text()
+        word_style = theme.color_style(theme.CREAM_RGB, bg_rgb=theme.BANNER_BLUE_RGB)
+        sub_style = theme.color_style(theme.TEAL_LIGHT_RGB, bg_rgb=theme.BANNER_BLUE_RGB)
+        for line in theme.WORDMARK_LINES:
+            banner.append(line + "\n", style=word_style)
+        banner.append(theme.SUBTITLE + "\n", style=sub_style)
+        banner.append(theme.render_signal_band_text(48, 3, seed=42))
+        self.query_one("#menu-banner", Static).update(banner)
 
     def _sync_narrator_label(self) -> None:
         enabled = getattr(self.app, "narrator_enabled", True)
         state = "ON" if enabled else "OFF"
-        self.query_one("#btn-narrator-toggle", Button).label = f"Settings: Narrator {state}"
+        self.query_one("#btn-narrator-toggle", Button).label = f"[N]  Settings: Narrator {state}"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         btn_id = event.button.id
