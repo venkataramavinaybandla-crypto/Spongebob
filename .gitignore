@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Never push to GitHub
+agents.md
+architecture.json
+memory.md
+context.md
+workflows.md
+persona_maaaaa.txt
+Pre-requirements/
