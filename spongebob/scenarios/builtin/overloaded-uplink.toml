@@ -1,0 +1,35 @@
+[scenario]
+name = "Overloaded Uplink"
+description = "Narrow residential uplink with tight bandwidth cap and shallow queue tail-drops."
+
+[flow]
+packets = 80
+interval_ms = 5.0
+size_bytes = 256
+seed = 42
+
+[[hop]]
+name = "client"
+delay_ms = 4.0
+jitter_ms = 1.0
+loss_pct = 0.0
+
+[[hop]]
+name = "router"
+delay_ms = 10.0
+jitter_ms = 1.0
+loss_pct = 0.0
+bandwidth_kbps = 64.0
+queue_limit_packets = 3
+
+[[hop]]
+name = "isp"
+delay_ms = 15.0
+jitter_ms = 2.0
+loss_pct = 0.0
+
+[[hop]]
+name = "server"
+delay_ms = 5.0
+jitter_ms = 1.0
+loss_pct = 0.0

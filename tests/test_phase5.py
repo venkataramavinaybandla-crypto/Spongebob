@@ -163,10 +163,12 @@ def test_privacy_guard_no_network_imports_or_file_writes_in_src() -> None:
     src_root = Path("spongebob")
     allowed_network_file = Path("spongebob", "diagnose", "probes.py")
     allowed_in_probes = {"socket"}
+    export_dir = Path("spongebob", "export")
 
     for py_file in src_root.rglob("*.py"):
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
         is_probes = py_file == allowed_network_file
+        is_export = export_dir in py_file.parents
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -179,7 +181,7 @@ def test_privacy_guard_no_network_imports_or_file_writes_in_src() -> None:
                 if is_probes and top in allowed_in_probes:
                     continue
                 assert top not in NETWORK_MODULES, f"Network import {top} in {py_file}"
-            elif isinstance(node, ast.Call):
+            elif isinstance(node, ast.Call) and not is_export:
                 if isinstance(node.func, ast.Name) and node.func.id == "open":
                     # Disallow write/append/exclusive modes
                     for arg in node.args[1:2]:

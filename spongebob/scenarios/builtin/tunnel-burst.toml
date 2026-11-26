@@ -1,0 +1,38 @@
+[scenario]
+name = "Tunnel Burst"
+description = "Intermittent tunnel link with Gilbert-Elliott two-state bursty packet loss."
+
+[flow]
+packets = 120
+interval_ms = 10.0
+size_bytes = 64
+seed = 7
+
+[[hop]]
+name = "client"
+delay_ms = 5.0
+jitter_ms = 1.0
+loss_pct = 0.0
+
+[[hop]]
+name = "router"
+delay_ms = 10.0
+jitter_ms = 2.0
+loss_pct = 0.0
+
+[[hop]]
+name = "isp"
+delay_ms = 20.0
+jitter_ms = 3.0
+loss_pct = 0.0
+loss_model = "gilbert"
+p_good_to_bad = 0.25
+p_bad_to_good = 0.2
+loss_good = 0.0
+loss_bad = 100.0
+
+[[hop]]
+name = "server"
+delay_ms = 5.0
+jitter_ms = 1.0
+loss_pct = 0.0

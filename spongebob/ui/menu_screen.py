@@ -17,6 +17,7 @@ class MenuScreen(Screen[None]):
         Binding("s", "open_simulate", "Simulate"),
         Binding("v", "open_visualize", "Visualize"),
         Binding("d", "open_diagnose", "Diagnose"),
+        Binding("p", "open_settings", "Plugins/Settings"),
         Binding("n", "toggle_narrator", "Narrator On/Off"),
         Binding("q", "quit_app", "Quit"),
     ]
@@ -84,6 +85,7 @@ class MenuScreen(Screen[None]):
                     yield Button("[S]  Simulate   (Delay, Jitter, Loss)", id="btn-simulate", variant="primary")
                     yield Button("[V]  Visualize  (Live Pipe Replay)", id="btn-visualize")
                     yield Button("[D]  Diagnose   (Live Target Probe)", id="btn-diagnose")
+                    yield Button("[P]  Plugins & Settings", id="btn-settings")
                     yield Button("[N]  Settings: Narrator ON", id="btn-narrator-toggle")
                     yield Button("[Q]  Quit", id="btn-quit", variant="error")
         yield Static(theme.format_status_line("SYSTEM READY", 1.0), id="menu-status", classes="status-bar")
@@ -130,6 +132,8 @@ class MenuScreen(Screen[None]):
             self.action_open_visualize()
         elif btn_id == "btn-diagnose":
             self.action_open_diagnose()
+        elif btn_id == "btn-settings":
+            self.action_open_settings()
         elif btn_id == "btn-narrator-toggle":
             self.action_toggle_narrator()
         elif btn_id == "btn-quit":
@@ -147,6 +151,9 @@ class MenuScreen(Screen[None]):
 
     def action_open_diagnose(self) -> None:
         self.app.open_diagnose()  # type: ignore[attr-defined]
+
+    def action_open_settings(self) -> None:
+        self.app.open_settings()  # type: ignore[attr-defined]
 
     def action_quit_app(self) -> None:
         self.app.exit()

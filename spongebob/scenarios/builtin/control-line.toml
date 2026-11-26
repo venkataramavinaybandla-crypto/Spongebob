@@ -1,0 +1,33 @@
+[scenario]
+name = "Clean Control Line"
+description = "Baseline wired path with low delay, minimal jitter, and zero packet loss."
+
+[flow]
+packets = 100
+interval_ms = 10.0
+size_bytes = 64
+seed = 42
+
+[[hop]]
+name = "client"
+delay_ms = 5.0
+jitter_ms = 1.0
+loss_pct = 0.0
+
+[[hop]]
+name = "router"
+delay_ms = 10.0
+jitter_ms = 1.0
+loss_pct = 0.0
+
+[[hop]]
+name = "isp"
+delay_ms = 15.0
+jitter_ms = 2.0
+loss_pct = 0.0
+
+[[hop]]
+name = "server"
+delay_ms = 5.0
+jitter_ms = 1.0
+loss_pct = 0.0

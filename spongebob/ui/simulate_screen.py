@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -8,9 +10,17 @@ from textual.widgets import Button, Footer, Input, Label, Select, Static
 
 from spongebob.analyzer import Finding, analyze
 from spongebob.engine import Flow, Hop, default_path, simulate
+from spongebob.export import ExportPayload, export_report
 from spongebob.meter import Metrics, measure
 from spongebob.narrator import MASCOT_NAME
+from spongebob.scenarios import (
+    Scenario,
+    list_builtin_scenarios,
+    load_builtin_scenario,
+    load_scenario,
+)
 from spongebob.ui import theme
+from spongebob.ui.export_modal import ExportOverwriteModal
 
 
 class SimulateScreen(Screen[None]):
@@ -123,6 +133,10 @@ class SimulateScreen(Screen[None]):
     #actions-row Button {{
         margin-right: 1;
     }}
+    #export-path, #scenario-path, #scenario-select {{
+        width: 1fr;
+        margin-right: 1;
+    }}
     #metrics-output, #findings-output, #narrator-output {{
         margin-bottom: 1;
         color: {theme.CREAM};
@@ -142,6 +156,7 @@ class SimulateScreen(Screen[None]):
         self._has_results = False
         self._dirty = False
         self._initial_values: dict[str | None, str] = {}
+        self._last_export_data: tuple[Scenario, list, Metrics, list[Finding], list] | None = None
 
     def compose(self) -> ComposeResult:
         yield theme.make_top_title("SIMULATE")
@@ -183,6 +198,23 @@ class SimulateScreen(Screen[None]):
                             )
 
                 with VerticalScroll(id="secondary-scroll"):
+                    yield Static("LOAD SCENARIO", classes="section-title")
+                    scenario_options: list[tuple[str, str]] = [
+                        (name, name) for name in list_builtin_scenarios()
+                    ]
+                    reg = getattr(self.app, "plugin_registry", None)
+                    if reg is not None:
+                        for pname in sorted(reg.scenarios):
+                            scenario_options.append((pname, pname))
+                    with Horizontal(classes="row"):
+                        yield Select(
+                            scenario_options,
+                            prompt="Select built-in / plugin",
+                            id="scenario-select",
+                        )
+                        yield Input("", placeholder="or type .toml path", id="scenario-path")
+                        yield Button("Load", id="btn-load-scenario")
+
                     yield Static("FLOW SETTINGS", classes="section-title")
                     with Horizontal(classes="row"):
                         with Vertical(classes="field"):
@@ -239,6 +271,11 @@ class SimulateScreen(Screen[None]):
                 yield Static("No findings yet.", id="findings-output")
                 yield Static(MASCOT_NAME.upper(), classes="section-title")
                 yield Static("Narrator ready.", id="narrator-output")
+                yield Static("EXPORT REPORT", classes="section-title")
+                with Horizontal(classes="row"):
+                    yield Input("", placeholder="report.json / .csv / .md", id="export-path")
+                    yield Button("Export", id="btn-export", disabled=True)
+                yield Static("", id="export-status")
         yield Static(theme.format_status_line("SIMULATE READY", 0.0), id="sim-status", classes="status-bar")
         yield Footer()
 
@@ -323,7 +360,10 @@ class SimulateScreen(Screen[None]):
         self._dirty = True
         self._validate_live()
 
-    def on_select_changed(self, _: Select.Changed) -> None:
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "scenario-select" and event.value not in (None, Select.BLANK):
+            self._load_named_scenario(str(event.value))
+            return
         if self._initial_values:
             self._dirty = True
             self._validate_live()
@@ -333,6 +373,100 @@ class SimulateScreen(Screen[None]):
             self._run_simulation()
         elif event.button.id == "btn-open-visualize":
             self.action_open_visualize()
+        elif event.button.id == "btn-load-scenario":
+            self._load_typed_scenario()
+        elif event.button.id == "btn-export":
+            self._handle_export()
+
+    def _apply_scenario(self, scenario: Scenario) -> None:
+        self.query_one("#flow-packets", Input).value = str(scenario.flow.packet_count)
+        self.query_one("#flow-interval", Input).value = str(scenario.flow.interval_ms)
+        self.query_one("#flow-size", Input).value = str(scenario.flow.size_bytes)
+        self.query_one("#flow-seed", Input).value = (
+            "" if scenario.seed is None else str(scenario.seed)
+        )
+        by_name = {h.name: h for h in scenario.hops}
+        default_names = [h.name for h in default_path()]
+        for idx, hop_name in enumerate(default_names):
+            hop = by_name.get(hop_name)
+            if hop is None and idx < len(scenario.hops):
+                hop = scenario.hops[idx]
+            if hop is None:
+                continue
+            self.query_one(f"#hop-{hop_name}-delay", Input).value = str(hop.delay_ms)
+            self.query_one(f"#hop-{hop_name}-jitter", Input).value = str(hop.jitter_ms)
+            self.query_one(f"#hop-{hop_name}-loss", Input).value = str(hop.loss_pct)
+            self.query_one(f"#hop-{hop_name}-bw", Input).value = (
+                "" if hop.bandwidth_kbps is None else str(hop.bandwidth_kbps)
+            )
+            self.query_one(f"#hop-{hop_name}-qlim", Input).value = (
+                "" if hop.queue_limit_packets is None else str(hop.queue_limit_packets)
+            )
+            self.query_one(f"#hop-{hop_name}-lmodel", Select).value = hop.loss_model
+            self.query_one(f"#hop-{hop_name}-pg2b", Input).value = str(hop.p_good_to_bad)
+            self.query_one(f"#hop-{hop_name}-pb2g", Input).value = str(hop.p_bad_to_good)
+            self.query_one(f"#hop-{hop_name}-lbad", Input).value = str(hop.loss_bad)
+        self.query_one("#sim-status", Static).update(
+            theme.format_status_line(f"LOADED {scenario.name.upper()}", 0.0)
+        )
+
+    def _load_named_scenario(self, name: str) -> None:
+        reg = getattr(self.app, "plugin_registry", None)
+        try:
+            if reg is not None and name in reg.scenarios:
+                sc = reg.scenarios[name]
+            else:
+                sc = load_builtin_scenario(name)
+            self._apply_scenario(sc)
+        except Exception as exc:
+            self.query_one("#validation-error", Static).update(f"Scenario error: {exc}")
+
+    def _load_typed_scenario(self) -> None:
+        raw_path = self.query_one("#scenario-path", Input).value.strip()
+        if not raw_path:
+            self.query_one("#validation-error", Static).update("Enter a scenario .toml path.")
+            return
+        try:
+            sc = load_scenario(raw_path)
+            self._apply_scenario(sc)
+            self.query_one("#validation-error", Static).update("")
+        except Exception as exc:
+            self.query_one("#validation-error", Static).update(f"Scenario error: {exc}")
+
+    def _handle_export(self) -> None:
+        if self._last_export_data is None:
+            return
+        raw_path = self.query_one("#export-path", Input).value.strip()
+        status = self.query_one("#export-status", Static)
+        if not raw_path:
+            status.update("Enter an export path (.json, .csv, .md).")
+            return
+        sc, events, metrics, findings, narr_lines = self._last_export_data
+        payload = ExportPayload(
+            source="simulation",
+            metrics=metrics,
+            findings=findings,
+            events=events,
+            narrator_lines=tuple(narr_lines),
+            scenario=sc,
+            latency_kind="one_way",
+            include_narrator=getattr(self.app, "narrator_enabled", True),
+        )
+
+        def _do_write(force: bool) -> None:
+            try:
+                out = export_report(payload, raw_path, force=force)
+                status.update(f"Exported: {out}")
+            except Exception as exc:
+                status.update(f"Export failed: {exc}")
+
+        if Path(raw_path).exists():
+            self.app.push_screen(
+                ExportOverwriteModal(raw_path),
+                lambda ok: _do_write(True) if ok else status.update("Export cancelled."),
+            )
+        else:
+            _do_write(False)
 
     def _run_simulation(self) -> None:
         parsed = self._validate_live()
@@ -349,6 +483,21 @@ class SimulateScreen(Screen[None]):
         self.app.last_run_latency_kind = "one_way"  # type: ignore[attr-defined]
         self._has_results = True
         self.query_one("#btn-open-visualize", Button).disabled = False
+        self.query_one("#btn-export", Button).disabled = False
+
+        narr_lines = (
+            self.app.narrator.narrate(findings, metrics, events, seed=seed)  # type: ignore[attr-defined]
+            if getattr(self.app, "narrator_enabled", True)
+            else []
+        )
+        sc_obj = Scenario(
+            name="Interactive Simulation",
+            description="Configured in Simulate screen.",
+            flow=flow,
+            hops=tuple(path),
+            seed=seed,
+        )
+        self._last_export_data = (sc_obj, events, metrics, findings, narr_lines)
 
         self._render_metrics(metrics)
         self._render_findings(findings)

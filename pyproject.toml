@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spongebob"
-version = "0.2.1"
+version = "0.3.0"
 description = "Spongebob — Network Impairment Simulator for delay, jitter, and packet loss."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,9 @@ spongebob = "spongebob.__main__:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["spongebob*"]
+
+[tool.setuptools.package-data]
+"spongebob.scenarios" = ["builtin/*.toml"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -47,7 +47,10 @@ CLI flags and headless module runners:
 ```bash
 spongebob --version
 spongebob --help
-spongebob diagnose <host> [--port 443] [--count 20] [--interval-ms 200] [--dns]
+spongebob scenarios
+spongebob run <file.toml | builtin-name> [--seed N] [--export <path>]
+spongebob diagnose <host> [--port 443] [--count 20] [--interval-ms 200] [--dns] [--export <path>]
+spongebob plugins <dir>
 python -m spongebob
 python -m spongebob.engine
 python -m spongebob.meter
@@ -109,9 +112,77 @@ Spongebob aims for maximum practical privacy rather than making an "absolute" pr
 
 <img src="assets/divider.svg" alt="" width="100%">
 
+## Scenarios
+
+Scenarios define a reproducible flow and hop path in TOML (`<= 64 KB`, `<= 12` hops, `<= 100,000` packets):
+
+- **`[scenario]`:** `name`, `description`
+- **`[flow]`:** `packets`, `interval_ms`, `size_bytes`, optional `seed`
+- **`[[hop]]`:** `name`, `delay_ms`, `jitter_ms`, `loss_pct`, plus optional `jitter_model`, `bandwidth_kbps`, `queue_limit_packets`, `loss_model`, `p_good_to_bad`, `p_bad_to_good`, `loss_good`, `loss_bad`
+
+Built-in scenarios:
+
+- `control-line` — Clean wired baseline (no findings)
+- `crowded-wifi` — Peak-hour wireless jitter and mild loss
+- `tunnel-burst` — Gilbert-Elliott two-state bursty loss
+- `long-haul-orbit` — High propagation delay with steady timing
+- `overloaded-uplink` — Tight bandwidth cap and queue-full tail drops
+- `flaky-last-mile` — Degraded access link with random packet loss
+
+Run from the CLI (`spongebob scenarios` to list, `spongebob run <file.toml | builtin-name> [--seed N]`) or load inside **Simulate**.
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## Export
+
+Both `spongebob run` and `spongebob diagnose` (and their UI result panels) support exporting reports only when you explicitly pass `--export <path>` or click **Export**:
+
+- **`.json`:** Schema v1 with `spongebob_version`, `source`, `scenario` (when available), `metrics`, `findings`, `narrator`, and raw `events` only when `--events` is passed. Diagnose exports include `"latency_kind": "rtt"` and the typed target host/port.
+- **`.csv`:** One row per packet (`seq`, `send_time_ms`, `outcome`, `latency_ms`, `drop_hop`, `drop_reason`) with formula-injection escaping.
+- **`.md`:** Human-readable report with configured vs. measured values (for simulations), full metrics, severity-ordered findings, mascot lines (omit with `--no-narrator`), and honest RTT/timeout limits (for diagnose).
+
+Exports are deterministic (no timestamps), atomic, never create missing parent folders, and refuse to overwrite existing files unless `--force` (or UI confirmation) is given.
+
+<img src="assets/divider.svg" alt="" width="100%">
+
+## Plugins
+
+Plugins are **data-only** folders containing `plugin.toml` plus TOML data files (`<= 20` files, `<= 64 KB` each, `<= 512 KB` total). Spongebob **never** imports, `eval`s, or executes code from plugins. Loading is **explicit only** (`--plugins <dir>` on the CLI or **Plugins & Settings** in the UI).
+
+Three plugin kinds are supported:
+
+1. **`scenarios`** — `.toml` scenario files registered as `<plugin-name>/<scenario>` (cannot override built-ins):
+
+```toml
+# plugin.toml
+name = "campus-lab"
+version = "0.1.0"
+kind = "scenarios"
+description = "Lab impairment scenarios"
+```
+
+2. **`jokes`** — Additional lines for `[findings]` (`"CODE.severity"`) and `[drop_reasons]` (`<= 200` chars, `{hop}` and `{value}` only, no control/ANSI escapes or banned names), added to built-in pools:
+
+```toml
+# jokes.toml
+[findings]
+"HIGH_DELAY.warn" = ["{hop} is paddling slowly at {value} ms!"]
+```
+
+3. **`theme`** — 6-digit hex color overrides under `[colors]` validated for contrast ratio `>= 4.5`:
+
+```toml
+# theme.toml
+[colors]
+bg = "#000501"
+cream = "#cbf7bc"
+```
+
+<img src="assets/divider.svg" alt="" width="100%">
+
 ## Roadmap
 
-- **v0.3:** Scenario files, export, and plugins.
+- **Candidate:** Time-varying scenarios (impairments that change mid-run).
 
 <img src="assets/divider.svg" alt="" width="100%">
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -17,9 +18,11 @@ from spongebob.diagnose.models import (
     validate_probe_params,
     validate_target,
 )
+from spongebob.export import ExportPayload, export_report
 from spongebob.meter import Metrics, measure
 from spongebob.narrator import MASCOT_NAME
 from spongebob.ui import theme
+from spongebob.ui.export_modal import ExportOverwriteModal
 
 
 class DiagnoseConfirmModal(ModalScreen[bool]):
@@ -160,6 +163,10 @@ class DiagnoseScreen(Screen[None]):
     #actions-row Button {{
         margin-right: 1;
     }}
+    #export-path {{
+        width: 1fr;
+        margin-right: 1;
+    }}
     #metrics-output, #findings-output, #narrator-output {{
         margin-bottom: 1;
         color: {theme.CREAM};
@@ -184,6 +191,7 @@ class DiagnoseScreen(Screen[None]):
         self._active_worker: Worker[Any] | None = None
         self._dirty = False
         self._initial_values: dict[str | None, str] = {}
+        self._last_export_data: tuple[str, int, list, Metrics, list[Finding], list] | None = None
 
     def compose(self) -> ComposeResult:
         yield theme.make_top_title("DIAGNOSE")
@@ -225,6 +233,11 @@ class DiagnoseScreen(Screen[None]):
                 yield Static("Narrator ready.", id="narrator-output")
                 yield Static("COULD NOT PROBE", classes="section-title")
                 yield Static("None.", id="errors-output")
+                yield Static("EXPORT REPORT", classes="section-title")
+                with Horizontal(classes="row"):
+                    yield Input("", placeholder="diag.json / .csv / .md", id="export-path")
+                    yield Button("Export", id="btn-export", disabled=True)
+                yield Static("", id="export-status")
         yield Static(theme.format_status_line("DIAGNOSE READY", 0.0), id="diag-status", classes="status-bar")
         yield Footer()
 
@@ -284,6 +297,44 @@ class DiagnoseScreen(Screen[None]):
             self._prompt_and_start()
         elif event.button.id == "btn-open-visualize":
             self.action_open_visualize()
+        elif event.button.id == "btn-export":
+            self._handle_export()
+
+    def _handle_export(self) -> None:
+        if self._last_export_data is None:
+            return
+        raw_path = self.query_one("#export-path", Input).value.strip()
+        status = self.query_one("#export-status", Static)
+        if not raw_path:
+            status.update("Enter an export path (.json, .csv, .md).")
+            return
+        host, port, events, metrics, findings, narr_lines = self._last_export_data
+        payload = ExportPayload(
+            source="diagnose",
+            metrics=metrics,
+            findings=findings,
+            events=events,
+            narrator_lines=tuple(narr_lines),
+            latency_kind="rtt",
+            target_host=host,
+            target_port=port,
+            include_narrator=getattr(self.app, "narrator_enabled", True),
+        )
+
+        def _do_write(force: bool) -> None:
+            try:
+                out = export_report(payload, raw_path, force=force)
+                status.update(f"Exported: {out}")
+            except Exception as exc:
+                status.update(f"Export failed: {exc}")
+
+        if Path(raw_path).exists():
+            self.app.push_screen(
+                ExportOverwriteModal(raw_path),
+                lambda ok: _do_write(True) if ok else status.update("Export cancelled."),
+            )
+        else:
+            _do_write(False)
 
     def _prompt_and_start(self) -> None:
         parsed = self._validate_live()
@@ -360,6 +411,23 @@ class DiagnoseScreen(Screen[None]):
             self.app.last_run_latency_kind = "rtt"  # type: ignore[attr-defined]
             self._has_results = True
             self.query_one("#btn-open-visualize", Button).disabled = False
+            self.query_one("#btn-export", Button).disabled = False
+
+            narr_lines = (
+                self.app.narrator.narrate(  # type: ignore[attr-defined]
+                    findings, metrics, adapted.events, mode="diagnose"
+                )
+                if getattr(self.app, "narrator_enabled", True)
+                else []
+            )
+            self._last_export_data = (
+                host,
+                port,
+                adapted.events,
+                metrics,
+                findings,
+                narr_lines,
+            )
 
             self._render_metrics(metrics)
             self._render_findings(findings)

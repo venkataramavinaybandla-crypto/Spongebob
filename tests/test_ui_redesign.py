@@ -56,6 +56,8 @@ def test_no_hardcoded_hex_in_screen_files() -> None:
         "simulate_screen.py",
         "visualize_screen.py",
         "diagnose_screen.py",
+        "export_modal.py",
+        "settings_screen.py",
     ):
         src = (ui_dir / filename).read_text(encoding="utf-8")
         matches = hex_pattern.findall(src)
@@ -63,7 +65,7 @@ def test_no_hardcoded_hex_in_screen_files() -> None:
 
 
 def test_signal_bands_deterministic_and_version() -> None:
-    assert __version__ == "0.2.1"
+    assert __version__ == "0.3.0"
     b1 = theme.generate_signal_bands(40, 4, seed=42)
     b2 = theme.generate_signal_bands(40, 4, seed=42)
     assert b1 == b2

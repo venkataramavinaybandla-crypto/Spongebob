@@ -43,6 +43,124 @@ CRIT_RED_RGB = (248, 113, 113)
 DIM_TEXT = "#649e8a"
 DIM_TEXT_RGB = (100, 158, 138)
 
+DEFAULT_PALETTE: dict[str, str] = {
+    "bg": BG,
+    "banner_blue": BANNER_BLUE,
+    "cream": CREAM,
+    "signal_green": SIGNAL_GREEN,
+    "teal_light": TEAL_LIGHT,
+    "teal_mid": TEAL_MID,
+    "teal_dark": TEAL_DARK,
+    "red_rule": RED_RULE,
+    "warn_amber": WARN_AMBER,
+    "crit_red": CRIT_RED,
+    "dim_text": DIM_TEXT,
+}
+
+THEME_ROLES: frozenset[str] = frozenset(DEFAULT_PALETTE.keys())
+
+
+def build_base_css(palette: dict[str, str] | None = None) -> str:
+    """Build base Textual CSS from a palette dictionary."""
+    p = {**DEFAULT_PALETTE, **(palette or {})}
+    return f"""
+Screen {{
+    background: {p['bg']};
+    color: {p['cream']};
+}}
+.top-title {{
+    height: 1;
+    padding: 0 1;
+    background: {p['bg']};
+    color: {p['cream']};
+    text-style: bold;
+}}
+.red-rule {{
+    height: 1;
+    background: {p['bg']};
+    color: {p['red_rule']};
+}}
+.screen-banner {{
+    height: auto;
+    padding: 0 1;
+    background: {p['banner_blue']};
+    color: {p['cream']};
+    text-style: bold;
+    border: solid {p['signal_green']};
+}}
+.outlined-box {{
+    border: solid {p['signal_green']};
+    background: {p['bg']};
+    color: {p['cream']};
+    padding: 0 1;
+}}
+.box-title {{
+    text-style: bold;
+    color: {p['signal_green']};
+}}
+.status-bar {{
+    height: 1;
+    padding: 0 1;
+    background: {p['bg']};
+    color: {p['signal_green']};
+    border-top: solid {p['signal_green']};
+}}
+Button {{
+    background: {p['bg']};
+    color: {p['cream']};
+    border: solid {p['signal_green']};
+    min-height: 1;
+    height: auto;
+}}
+Button:focus {{
+    background: {p['banner_blue']};
+    color: {p['cream']};
+    text-style: bold;
+}}
+Button.-primary {{
+    background: {p['bg']};
+    color: {p['signal_green']};
+    border: solid {p['signal_green']};
+}}
+Button.-primary:focus {{
+    background: {p['banner_blue']};
+    color: {p['cream']};
+    text-style: bold;
+}}
+Button.-error {{
+    background: {p['bg']};
+    color: {p['crit_red']};
+    border: solid {p['red_rule']};
+}}
+Button.-error:focus {{
+    background: {p['banner_blue']};
+    color: {p['cream']};
+    text-style: bold;
+}}
+Input {{
+    background: {p['bg']};
+    color: {p['cream']};
+    border: solid {p['signal_green']};
+}}
+Input:focus {{
+    border: solid {p['teal_light']};
+}}
+Checkbox {{
+    background: {p['bg']};
+    color: {p['cream']};
+    border: none;
+}}
+Select {{
+    background: {p['bg']};
+    color: {p['cream']};
+}}
+Footer {{
+    background: {p['bg']};
+    color: {p['dim_text']};
+}}
+"""
+
+
 SUBTITLE = "NETWORK IMPAIRMENT SIMULATOR AND VISUALIZER"
 
 WORDMARK_LINES: tuple[str, ...] = (
