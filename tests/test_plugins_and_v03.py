@@ -20,6 +20,7 @@ from spongebob.ui.export_modal import ExportOverwriteModal
 from spongebob.ui.menu_screen import MenuScreen
 from spongebob.ui.settings_screen import SettingsScreen
 from spongebob.ui.simulate_screen import SimulateScreen
+from tests.conftest import wait_for_screen, wait_until
 
 
 def _write_manifest(folder: Path, name: str, kind: str, extra: str = "") -> None:
@@ -239,58 +240,64 @@ async def test_ui_load_scenario_export_overwrite_and_settings_plugins(tmp_path: 
     app = SimulatorApp()
     async with app.run_test(size=(110, 42)) as pilot:
         # 1. Settings screen loads plugins from typed path
-        await pilot.click("#btn-settings")
-        await pilot.pause()
-        assert isinstance(app.screen, SettingsScreen)
+        app.screen.query_one("#btn-settings", Button).press()
+        await wait_for_screen(pilot, app, SettingsScreen)
         app.screen.query_one("#plugin-dir-input", Input).value = str(tmp_path / "plugs")
-        await pilot.click("#btn-load-plugins")
-        await pilot.pause()
+        app.screen.query_one("#btn-load-plugins", Button).press()
+        await wait_until(
+            pilot,
+            lambda: "ui-pack" in str(app.screen.query_one("#plugin-status", Static).render()),
+            message="Expected ui-pack in #plugin-status",
+        )
         status_txt = str(app.screen.query_one("#plugin-status", Static).render())
         assert "ui-pack" in status_txt
         assert "1 jokes" in status_txt
         await pilot.press("escape")
-        await pilot.pause()
-        assert isinstance(app.screen, MenuScreen)
+        await wait_for_screen(pilot, app, MenuScreen)
 
         # 2. Simulate: Load scenario fills hop rows, then Run + Export + Overwrite confirm
-        await pilot.click("#btn-simulate")
-        await pilot.pause()
-        assert isinstance(app.screen, SimulateScreen)
+        app.screen.query_one("#btn-simulate", Button).press()
+        await wait_for_screen(pilot, app, SimulateScreen)
 
         app.screen.query_one("#scenario-select", Select).value = "flaky-last-mile"
-        await pilot.pause()
-        assert app.screen.query_one("#hop-client-loss", Input).value == "8.0"
+        await wait_until(
+            pilot,
+            lambda: app.screen.query_one("#hop-client-loss", Input).value == "8.0",
+            message="Expected hop-client-loss to be filled with 8.0",
+        )
 
-        await pilot.click("#btn-run")
-        await pilot.pause()
-        assert app.screen.query_one("#btn-export", Button).disabled is False
+        app.screen.query_one("#btn-run", Button).press()
+        await wait_until(
+            pilot,
+            lambda: app.screen.query_one("#btn-export", Button).disabled is False,
+            message="Expected #btn-export to be enabled after run",
+        )
 
         out_file = tmp_path / "ui_report.json"
         app.screen.query_one("#export-path", Input).value = str(out_file)
-        app.screen.query_one("#btn-export", Button).scroll_visible()
-        await pilot.pause()
-        await pilot.click("#btn-export")
-        await pilot.pause()
-        assert out_file.is_file()
+        app.screen.query_one("#btn-export", Button).press()
+        await wait_until(
+            pilot,
+            lambda: out_file.is_file(),
+            message="Expected initial export file to be written",
+        )
         assert json.loads(out_file.read_text(encoding="utf-8"))["schema"] == 1
 
         # Second export to existing file opens overwrite modal; Esc cancels
         out_file.write_text("sentinel", encoding="utf-8")
-        app.screen.query_one("#btn-export", Button).scroll_visible()
-        await pilot.pause()
-        await pilot.click("#btn-export")
-        await pilot.pause()
-        assert isinstance(app.screen, ExportOverwriteModal)
+        app.screen.query_one("#btn-export", Button).press()
+        await wait_for_screen(pilot, app, ExportOverwriteModal)
         await pilot.press("escape")
-        await pilot.pause()
+        await wait_for_screen(pilot, app, SimulateScreen)
         assert out_file.read_text(encoding="utf-8") == "sentinel"
 
         # Confirm overwrite replaces file
-        app.screen.query_one("#btn-export", Button).scroll_visible()
-        await pilot.pause()
-        await pilot.click("#btn-export")
-        await pilot.pause()
-        assert isinstance(app.screen, ExportOverwriteModal)
-        await pilot.click("#btn-overwrite-yes")
-        await pilot.pause()
+        app.screen.query_one("#btn-export", Button).press()
+        await wait_for_screen(pilot, app, ExportOverwriteModal)
+        app.screen.query_one("#btn-overwrite-yes", Button).press()
+        await wait_until(
+            pilot,
+            lambda: out_file.read_text(encoding="utf-8") != "sentinel",
+            message="Expected overwrite to replace sentinel file",
+        )
         assert json.loads(out_file.read_text(encoding="utf-8"))["schema"] == 1

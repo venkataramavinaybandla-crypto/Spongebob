@@ -8,6 +8,7 @@ from spongebob.ui.menu_screen import MenuScreen
 from spongebob.ui.replay import compute_replay_state, select_pulse_target
 from spongebob.ui.simulate_screen import SimulateScreen
 from spongebob.ui.visualize_screen import VisualizeScreen
+from tests.conftest import wait_for_screen, wait_until
 
 
 def test_braille_canvas_set_clear_bounds_and_fade() -> None:
@@ -101,30 +102,41 @@ async def test_textual_pilot_navigation_validation_run_and_visualize() -> None:
         assert isinstance(app.screen, MenuScreen)
 
         # Navigate to Simulate
-        await pilot.click("#btn-simulate")
-        await pilot.pause()
-        assert isinstance(app.screen, SimulateScreen)
+        app.screen.query_one("#btn-simulate").press()
+        await wait_for_screen(pilot, app, SimulateScreen)
 
         # Bad input validation disables Run button and shows error
         packets_input = app.screen.query_one("#flow-packets")
         packets_input.value = "-5"
-        await pilot.pause()
-        assert app.screen.query_one("#btn-run").disabled is True
+        await wait_until(
+            pilot,
+            lambda: app.screen.query_one("#btn-run").disabled is True,
+            message="Expected #btn-run disabled on invalid packets",
+        )
         assert "Invalid input" in str(app.screen.query_one("#validation-error").render())
 
         # Fix input and run simulation
         packets_input.value = "30"
-        await pilot.pause()
-        assert app.screen.query_one("#btn-run").disabled is False
-        await pilot.click("#btn-run")
-        await pilot.pause()
-        assert app.last_run is not None
-        assert app.screen.query_one("#btn-open-visualize").disabled is False
+        await wait_until(
+            pilot,
+            lambda: app.screen.query_one("#btn-run").disabled is False,
+            message="Expected #btn-run enabled after fixing packets",
+        )
+        app.screen.query_one("#btn-run").press()
+        await wait_until(
+            pilot,
+            lambda: app.last_run is not None
+            and app.screen.query_one("#btn-open-visualize").disabled is False,
+            message="Expected simulation results and enabled #btn-open-visualize",
+        )
 
         # Open Visualize from Simulate
-        await pilot.click("#btn-open-visualize")
-        await pilot.pause()
-        assert isinstance(app.screen, VisualizeScreen)
+        app.screen.query_one("#btn-open-visualize").press()
+        await wait_until(
+            pilot,
+            lambda: isinstance(app.screen, VisualizeScreen),
+            message="Expected VisualizeScreen",
+        )
 
         # Controls work without error
         await pilot.press("space")
@@ -134,10 +146,16 @@ async def test_textual_pilot_navigation_validation_run_and_visualize() -> None:
 
         # Esc returns to Simulate
         await pilot.press("escape")
-        await pilot.pause()
-        assert isinstance(app.screen, SimulateScreen)
+        await wait_until(
+            pilot,
+            lambda: isinstance(app.screen, SimulateScreen),
+            message="Expected return to SimulateScreen",
+        )
 
         # Esc returns to Menu
         await pilot.press("escape")
-        await pilot.pause()
-        assert isinstance(app.screen, MenuScreen)
+        await wait_until(
+            pilot,
+            lambda: isinstance(app.screen, MenuScreen),
+            message="Expected return to MenuScreen",
+        )

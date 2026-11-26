@@ -13,6 +13,7 @@ from spongebob.ui.diagnose_screen import DiagnoseScreen
 from spongebob.ui.menu_screen import MenuScreen
 from spongebob.ui.simulate_screen import SimulateScreen
 from spongebob.ui.visualize_screen import VisualizeScreen
+from tests.conftest import wait_for_screen
 
 
 @pytest.mark.asyncio
@@ -83,9 +84,7 @@ async def test_all_screens_open_and_esc_returns() -> None:
             ("#btn-visualize", VisualizeScreen),
             ("#btn-diagnose", DiagnoseScreen),
         ):
-            await pilot.click(btn_id)
-            await pilot.pause()
-            assert isinstance(app.screen, screen_cls)
+            app.screen.query_one(btn_id).press()
+            await wait_for_screen(pilot, app, screen_cls)
             await pilot.press("escape")
-            await pilot.pause()
-            assert isinstance(app.screen, MenuScreen)
+            await wait_for_screen(pilot, app, MenuScreen)

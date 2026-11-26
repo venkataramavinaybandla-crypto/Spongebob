@@ -12,6 +12,7 @@ from spongebob.ui.app import SimulatorApp
 from spongebob.ui.diagnose_screen import DiagnoseConfirmModal, DiagnoseScreen
 from spongebob.ui.menu_screen import MenuScreen
 from spongebob.ui.visualize_screen import VisualizeScreen
+from tests.conftest import wait_for_screen, wait_until
 
 
 @pytest.mark.asyncio
@@ -22,9 +23,12 @@ async def test_menu_diagnose_enabled_and_opens_screen() -> None:
         assert isinstance(app.screen, MenuScreen)
         btn = app.screen.query_one("#btn-diagnose", Button)
         assert btn.disabled is False
-        await pilot.click("#btn-diagnose")
-        await pilot.pause()
-        assert isinstance(app.screen, DiagnoseScreen)
+        btn.press()
+        await wait_until(
+            pilot,
+            lambda: isinstance(app.screen, DiagnoseScreen),
+            message="Expected DiagnoseScreen",
+        )
 
 
 @pytest.mark.asyncio
@@ -87,21 +91,17 @@ async def test_diagnose_consent_decline_and_esc_probe_nothing() -> None:
             await pilot.pause()
 
             # Click Start -> Cancel
-            await pilot.click("#btn-start")
-            await pilot.pause()
-            assert isinstance(app.screen, DiagnoseConfirmModal)
-            await pilot.click("#btn-confirm-no")
-            await pilot.pause()
-            assert isinstance(app.screen, DiagnoseScreen)
+            screen.query_one("#btn-start", Button).press()
+            await wait_for_screen(pilot, app, DiagnoseConfirmModal)
+            app.screen.query_one("#btn-confirm-no", Button).press()
+            await wait_for_screen(pilot, app, DiagnoseScreen)
             assert connections == 0
 
             # Click Start -> Esc
-            await pilot.click("#btn-start")
-            await pilot.pause()
-            assert isinstance(app.screen, DiagnoseConfirmModal)
+            screen.query_one("#btn-start", Button).press()
+            await wait_for_screen(pilot, app, DiagnoseConfirmModal)
             await pilot.press("escape")
-            await pilot.pause()
-            assert isinstance(app.screen, DiagnoseScreen)
+            await wait_for_screen(pilot, app, DiagnoseScreen)
             assert connections == 0
     finally:
         server.close()
@@ -131,10 +131,14 @@ async def test_diagnose_local_server_full_run_and_visualize_rtt() -> None:
             screen.query_one("#diag-interval", Input).value = "100"
             await pilot.pause()
 
-            await pilot.click("#btn-start")
-            await pilot.pause()
-            await pilot.click("#btn-confirm-yes")
-            await pilot.pause(0.8)
+            screen.query_one("#btn-start", Button).press()
+            await wait_for_screen(pilot, app, DiagnoseConfirmModal)
+            app.screen.query_one("#btn-confirm-yes", Button).press()
+            await wait_until(
+                pilot,
+                lambda: "Round-trip time:" in str(screen.query_one("#metrics-output", Static).render()),
+                message="Expected metrics output after diagnose run",
+            )
 
             metrics_txt = str(screen.query_one("#metrics-output", Static).render())
             assert "Round-trip time:" in metrics_txt
@@ -143,8 +147,12 @@ async def test_diagnose_local_server_full_run_and_visualize_rtt() -> None:
 
             # Open Visualize from Diagnose results
             await pilot.press("v")
-            await pilot.pause(0.2)
-            assert isinstance(app.screen, VisualizeScreen)
+            await wait_until(
+                pilot,
+                lambda: isinstance(app.screen, VisualizeScreen)
+                and "RTT:" in str(app.screen.query_one("#readout-text", Static).render()),
+                message="Expected VisualizeScreen in RTT mode",
+            )
             assert app.screen._latency_kind == "rtt"
             readout_txt = str(app.screen.query_one("#readout-text", Static).render())
             assert "RTT:" in readout_txt
@@ -152,8 +160,11 @@ async def test_diagnose_local_server_full_run_and_visualize_rtt() -> None:
 
             # Esc returns cleanly
             await pilot.press("escape")
-            await pilot.pause()
-            assert isinstance(app.screen, DiagnoseScreen)
+            await wait_until(
+                pilot,
+                lambda: isinstance(app.screen, DiagnoseScreen),
+                message="Expected return to DiagnoseScreen from VisualizeScreen",
+            )
     finally:
         server.close()
         await server.wait_closed()
@@ -181,19 +192,25 @@ async def test_diagnose_cancel_mid_run_leaves_no_running_worker(
         screen.query_one("#diag-interval", Input).value = "100"
         await pilot.pause()
 
-        await pilot.click("#btn-start")
-        await pilot.pause()
-        await pilot.click("#btn-confirm-yes")
-        await pilot.pause(0.05)
+        screen.query_one("#btn-start", Button).press()
+        await wait_for_screen(pilot, app, DiagnoseConfirmModal)
+        app.screen.query_one("#btn-confirm-yes", Button).press()
+        await wait_until(
+            pilot,
+            lambda: screen._active_worker is not None,
+            message="Expected active worker to start",
+        )
 
         worker = screen._active_worker
         assert worker is not None
 
         # Esc cancels mid-run and returns to Menu
         await pilot.press("escape")
-        await pilot.pause(0.1)
-        assert isinstance(app.screen, MenuScreen)
-        assert worker.is_finished
+        await wait_until(
+            pilot,
+            lambda: isinstance(app.screen, MenuScreen) and worker.is_finished,
+            message="Expected MenuScreen and finished worker after Esc",
+        )
 
 
 @pytest.mark.asyncio
@@ -222,10 +239,14 @@ async def test_diagnose_refused_port_shows_errors_and_zero_loss(
         screen.query_one("#diag-interval", Input).value = "100"
         await pilot.pause()
 
-        await pilot.click("#btn-start")
-        await pilot.pause()
-        await pilot.click("#btn-confirm-yes")
-        await pilot.pause(0.2)
+        screen.query_one("#btn-start", Button).press()
+        await wait_for_screen(pilot, app, DiagnoseConfirmModal)
+        app.screen.query_one("#btn-confirm-yes", Button).press()
+        await wait_until(
+            pilot,
+            lambda: "refused" in str(screen.query_one("#errors-output", Static).render()),
+            message="Expected refused in #errors-output",
+        )
 
         metrics_txt = str(screen.query_one("#metrics-output", Static).render())
         errors_txt = str(screen.query_one("#errors-output", Static).render())

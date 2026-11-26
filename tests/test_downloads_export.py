@@ -12,8 +12,9 @@ from spongebob import __version__
 from spongebob.__main__ import main as cli_main
 from spongebob.export import default_export_path
 from spongebob.ui.app import SimulatorApp
-from spongebob.ui.diagnose_screen import DiagnoseScreen
+from spongebob.ui.diagnose_screen import DiagnoseConfirmModal, DiagnoseScreen
 from spongebob.ui.export_modal import DiagnoseExportModal
+from tests.conftest import wait_for_screen, wait_until
 
 
 @pytest.mark.parametrize(
@@ -96,10 +97,9 @@ async def test_ui_diagnose_export_modal_prefill_esc_and_edited_save(
     try:
         app = SimulatorApp()
         async with app.run_test(size=(110, 42)) as pilot:
-            await pilot.click("#btn-diagnose")
-            await pilot.pause()
+            app.screen.query_one("#btn-diagnose", Button).press()
+            await wait_for_screen(pilot, app, DiagnoseScreen)
             screen = app.screen
-            assert isinstance(screen, DiagnoseScreen)
 
             screen.query_one("#diag-host", Input).value = "127.0.0.1"
             screen.query_one("#diag-port", Input).value = str(port)
@@ -107,34 +107,36 @@ async def test_ui_diagnose_export_modal_prefill_esc_and_edited_save(
             screen.query_one("#diag-interval", Input).value = "100"
             await pilot.pause()
 
-            await pilot.click("#btn-start")
-            await pilot.pause()
-            await pilot.click("#btn-confirm-yes")
-            await pilot.pause(0.6)
+            screen.query_one("#btn-start", Button).press()
+            await wait_for_screen(pilot, app, DiagnoseConfirmModal)
+            app.screen.query_one("#btn-confirm-yes", Button).press()
+            await wait_until(
+                pilot,
+                lambda: screen.query_one("#btn-export", Button).disabled is False,
+                message="Expected #btn-export enabled after diagnose",
+            )
 
             # Open Export modal -> prefilled with Downloads path, Esc writes nothing
-            screen.query_one("#btn-export", Button).scroll_visible()
-            await pilot.pause()
-            await pilot.click("#btn-export")
-            await pilot.pause()
-            assert isinstance(app.screen, DiagnoseExportModal)
+            screen.query_one("#btn-export", Button).press()
+            await wait_for_screen(pilot, app, DiagnoseExportModal)
             prefilled = app.screen.query_one("#modal-export-path", Input).value
             assert prefilled == str(dl / "spongebob-diagnose-127.0.0.1.md")
 
             await pilot.press("escape")
-            await pilot.pause()
-            assert isinstance(app.screen, DiagnoseScreen)
+            await wait_for_screen(pilot, app, DiagnoseScreen)
             assert list(dl.iterdir()) == []
 
             # Re-open Export modal, edit path to .json, press Save -> writes edited path
-            await pilot.click("#btn-export")
-            await pilot.pause()
-            assert isinstance(app.screen, DiagnoseExportModal)
+            screen.query_one("#btn-export", Button).press()
+            await wait_for_screen(pilot, app, DiagnoseExportModal)
             edited = dl / "custom-diag.json"
             app.screen.query_one("#modal-export-path", Input).value = str(edited)
-            await pilot.click("#btn-export-save")
-            await pilot.pause()
-            assert edited.is_file()
+            app.screen.query_one("#btn-export-save", Button).press()
+            await wait_until(
+                pilot,
+                lambda: edited.is_file(),
+                message="Expected edited export file to be written",
+            )
             assert json.loads(edited.read_text(encoding="utf-8"))["source"] == "diagnose"
             status_txt = str(screen.query_one("#export-status", Static).render())
             assert str(edited) in status_txt
