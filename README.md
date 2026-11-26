@@ -6,7 +6,7 @@
 
 <img src="assets/subtitle.svg" alt="Network Impairment Simulator and Visualizer" width="640">
 
-<img src="assets/wave-live.svg" alt="" width="100%">
+<img src="assets/core-live.svg" alt="Delay, jitter, packet loss" width="760">
 
 </div>
 
