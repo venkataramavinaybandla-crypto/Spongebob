@@ -12,7 +12,7 @@ Spongebob (Network Impairment Simulator) is built for local, offline impairment 
 - **Diagnose mode:** Contacts only the single target host and port you explicitly type, and only after you confirm the consent prompt on every run. No application data is sent.
 - **Scenarios and plugins:** Files are read only from paths you explicitly type or pass via CLI flags; no home or default directories are scanned.
 - **Plugins are data-only:** Plugins are parsed as TOML data only and are never imported or executed as code.
-- **Exports:** Files are written only when you explicitly request an export (`--export <path>` or UI **Export**), to that exact path only.
+- **Exports:** Files are written only when you explicitly request an export (`--export <path>`, `--export-downloads`, or UI **Export**), to that exact path only. Diagnose export suggests a file in your Downloads folder, shows the exact path first, and writes only after you confirm. Diagnose reports include the target host you typed, so share them with care.
 
 ## Dependencies
 - The core simulation engine, meter, event bus, analyzer, narrator, diagnose probes, scenarios, export, and plugin loader use only the Python standard library.

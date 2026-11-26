@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import csv
+import ctypes
 import io
 import json
 import os
+import re
+import sys
 import tempfile
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -18,6 +22,81 @@ from spongebob.scenarios.models import Scenario
 
 SUPPORTED_EXTENSIONS = (".json", ".csv", ".md")
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+_DOWNLOADS_FOLDER_GUID = uuid.UUID("{374DE290-123F-4565-9164-39C4925E467B}")
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", ctypes.c_uint32),
+        ("Data2", ctypes.c_uint16),
+        ("Data3", ctypes.c_uint16),
+        ("Data4", ctypes.c_ubyte * 8),
+    ]
+
+
+def _uuid_to_guid(uid: uuid.UUID) -> _GUID:
+    data = uid.bytes_le
+    guid = _GUID()
+    ctypes.memmove(ctypes.byref(guid), data, 16)
+    return guid
+
+
+def get_downloads_dir() -> Path:
+    """Resolve the user's Downloads folder without creating directories."""
+    if sys.platform == "win32":
+        ptr = ctypes.c_wchar_p()
+        guid = _uuid_to_guid(_DOWNLOADS_FOLDER_GUID)
+        shell32 = ctypes.windll.shell32  # type: ignore[attr-defined]
+        ole32 = ctypes.windll.ole32  # type: ignore[attr-defined]
+        hr = shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(ptr))
+        try:
+            if hr != 0 or not ptr.value:
+                raise FileNotFoundError("Could not resolve Windows Downloads folder.")
+            downloads = Path(ptr.value)
+        finally:
+            if ptr.value is not None:
+                ole32.CoTaskMemFree(ptr)
+    else:
+        downloads = Path.home() / "Downloads"
+
+    if not downloads.is_dir():
+        raise FileNotFoundError(f"Downloads folder does not exist: {downloads}")
+    return downloads
+
+
+def _sanitize_target(target: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9.-]", "_", target.lower())
+    while ".." in cleaned:
+        cleaned = cleaned.replace("..", "_")
+    cleaned = re.sub(r"_+", "_", cleaned)
+    cleaned = re.sub(r"-+", "-", cleaned)
+    cleaned = cleaned.lstrip(".")
+    cleaned = cleaned[:60].rstrip(".")
+    return cleaned or "target"
+
+
+def default_export_path(
+    kind: str = "diagnose",
+    target: str = "target",
+    fmt: str = "md",
+) -> Path:
+    """Build a collision-free default export path inside the user's Downloads folder."""
+    ext = fmt.lstrip(".").lower()
+    if f".{ext}" not in SUPPORTED_EXTENSIONS:
+        supported = ", ".join(SUPPORTED_EXTENSIONS)
+        raise ValueError(f"Unsupported export format {fmt!r}. Supported: {supported}")
+
+    downloads = get_downloads_dir()
+    safe_kind = _sanitize_target(kind)
+    safe_target = _sanitize_target(target)
+    stem = f"spongebob-{safe_kind}-{safe_target}"
+
+    candidate = downloads / f"{stem}.{ext}"
+    suffix_num = 2
+    while candidate.exists():
+        candidate = downloads / f"{stem}-{suffix_num}.{ext}"
+        suffix_num += 1
+    return candidate
 
 
 @dataclass(frozen=True)

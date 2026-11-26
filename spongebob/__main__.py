@@ -64,6 +64,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Also probe system DNS resolution before TCP connect",
     )
     diag.add_argument("--plugins", default=None, help="Explicitly load plugins from this directory")
+    diag.add_argument(
+        "--export-downloads",
+        nargs="?",
+        const="md",
+        default=None,
+        choices=("md", "json", "csv"),
+        help="Export report to the user's Downloads folder (md, json, or csv; default md)",
+    )
     _add_export_flags(diag)
 
     run_p = subparsers.add_parser(
@@ -186,8 +194,10 @@ def _run_diagnose(args: argparse.Namespace) -> int:
             outcomes = ", ".join(sorted({s.outcome for s in err_samples}))
             print(f"Errors on {seg}: {len(err_samples)} ({outcomes})")
 
-    if getattr(args, "export", None):
-        from spongebob.export import ExportPayload, export_report
+    export_target = getattr(args, "export", None)
+    export_dl_fmt = getattr(args, "export_downloads", None)
+    if export_target or export_dl_fmt:
+        from spongebob.export import ExportPayload, default_export_path, export_report
 
         payload = ExportPayload(
             source="diagnose",
@@ -202,7 +212,12 @@ def _run_diagnose(args: argparse.Namespace) -> int:
             include_narrator=not bool(args.no_narrator),
         )
         try:
-            out_path = export_report(payload, args.export, force=bool(args.force))
+            dest = (
+                export_target
+                if export_target
+                else default_export_path(kind="diagnose", target=host, fmt=export_dl_fmt)
+            )
+            out_path = export_report(payload, dest, force=bool(args.force))
         except (ValueError, FileNotFoundError, FileExistsError, OSError) as exc:
             print(f"Export failed: {exc}", file=sys.stderr)
             return 2

@@ -49,7 +49,7 @@ spongebob --version
 spongebob --help
 spongebob scenarios
 spongebob run <file.toml | builtin-name> [--seed N] [--export <path>]
-spongebob diagnose <host> [--port 443] [--count 20] [--interval-ms 200] [--dns] [--export <path>]
+spongebob diagnose <host> [--port 443] [--count 20] [--interval-ms 200] [--dns] [--export <path> | --export-downloads [md|json|csv]]
 spongebob plugins <dir>
 python -m spongebob
 python -m spongebob.engine
@@ -141,7 +141,7 @@ Both `spongebob run` and `spongebob diagnose` (and their UI result panels) suppo
 - **`.csv`:** One row per packet (`seq`, `send_time_ms`, `outcome`, `latency_ms`, `drop_hop`, `drop_reason`) with formula-injection escaping.
 - **`.md`:** Human-readable report with configured vs. measured values (for simulations), full metrics, severity-ordered findings, mascot lines (omit with `--no-narrator`), and honest RTT/timeout limits (for diagnose).
 
-Exports are deterministic (no timestamps), atomic, never create missing parent folders, and refuse to overwrite existing files unless `--force` (or UI confirmation) is given.
+Exports are deterministic (no timestamps), atomic, never create missing parent folders, and refuse to overwrite existing files unless `--force` (or UI confirmation) is given. In Diagnose mode, the UI Export dialog suggests a file in your Downloads folder (`spongebob-diagnose-<target>.md`), shows the exact path first, and writes only after you press Save (or pass `--export-downloads` on the CLI). Diagnose reports include the target host you typed, so share them with care.
 
 <img src="assets/divider.svg" alt="" width="100%">
 

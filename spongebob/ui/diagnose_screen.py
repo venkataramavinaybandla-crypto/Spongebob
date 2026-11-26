@@ -18,11 +18,11 @@ from spongebob.diagnose.models import (
     validate_probe_params,
     validate_target,
 )
-from spongebob.export import ExportPayload, export_report
+from spongebob.export import ExportPayload, default_export_path, export_report
 from spongebob.meter import Metrics, measure
 from spongebob.narrator import MASCOT_NAME
 from spongebob.ui import theme
-from spongebob.ui.export_modal import ExportOverwriteModal
+from spongebob.ui.export_modal import DiagnoseExportModal, ExportOverwriteModal
 
 
 class DiagnoseConfirmModal(ModalScreen[bool]):
@@ -303,11 +303,7 @@ class DiagnoseScreen(Screen[None]):
     def _handle_export(self) -> None:
         if self._last_export_data is None:
             return
-        raw_path = self.query_one("#export-path", Input).value.strip()
         status = self.query_one("#export-status", Static)
-        if not raw_path:
-            status.update("Enter an export path (.json, .csv, .md).")
-            return
         host, port, events, metrics, findings, narr_lines = self._last_export_data
         payload = ExportPayload(
             source="diagnose",
@@ -321,20 +317,38 @@ class DiagnoseScreen(Screen[None]):
             include_narrator=getattr(self.app, "narrator_enabled", True),
         )
 
-        def _do_write(force: bool) -> None:
+        def _do_write(target_path: str, force: bool) -> None:
             try:
-                out = export_report(payload, raw_path, force=force)
+                out = export_report(payload, target_path, force=force)
                 status.update(f"Exported: {out}")
             except Exception as exc:
                 status.update(f"Export failed: {exc}")
 
-        if Path(raw_path).exists():
-            self.app.push_screen(
-                ExportOverwriteModal(raw_path),
-                lambda ok: _do_write(True) if ok else status.update("Export cancelled."),
-            )
+        def _on_modal_result(chosen_path: str | None) -> None:
+            if not chosen_path:
+                status.update("Export cancelled.")
+                return
+            if Path(chosen_path).exists():
+                self.app.push_screen(
+                    ExportOverwriteModal(chosen_path),
+                    lambda ok: _do_write(chosen_path, True) if ok else status.update("Export cancelled."),
+                )
+            else:
+                _do_write(chosen_path, False)
+
+        typed = self.query_one("#export-path", Input).value.strip()
+        if typed:
+            initial_path = typed
+            warning = None
         else:
-            _do_write(False)
+            try:
+                initial_path = str(default_export_path(kind="diagnose", target=host, fmt="md"))
+                warning = None
+            except Exception as exc:
+                initial_path = ""
+                warning = f"Downloads unavailable: {exc}"
+
+        self.app.push_screen(DiagnoseExportModal(initial_path, warning=warning), _on_modal_result)
 
     def _prompt_and_start(self) -> None:
         parsed = self._validate_live()
