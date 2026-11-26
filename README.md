@@ -6,9 +6,11 @@
 
 <img src="assets/subtitle.svg" alt="Network Impairment Simulator and Visualizer" width="640">
 
+<img src="assets/wave-live.svg" alt="" width="100%">
+
 </div>
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## What It Is
 
@@ -18,7 +20,7 @@ Spongebob is an open-source, terminal-based **Network Impairment Simulator** foc
 - **Jitter:** Wait times vary randomly per packet (uniform or normal), which can cause packets to arrive out of order.
 - **Packet Loss:** Packets are dropped at a hop via random percentage, Gilbert-Elliott bursty loss, or queue-full tail drops under a bandwidth cap.
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Install and Run
 
@@ -63,7 +65,7 @@ Run the test suite:
 pytest -v
 ```
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Screens
 
@@ -72,7 +74,7 @@ pytest -v
 - **Diagnose:** Configure a single target host, port, probe count, interval, and optional DNS check, confirm consent, and inspect live RTT metrics, segment-pinned findings, mascot narration, and non-loss errors. Press `V` from results to open **Visualize** in RTT mode.
 - **Visualize:** Full-terminal Braille living-pipe animation replaying events through the synchronous event bus, with bandwidth bottlenecks, queue pileups, distinct drop effects (including silent fade-out for probe timeouts), live telemetry, and a diagnostic scan pulse that stalls at the highest-severity hop. Controls: `Space` pause/resume, `+`/`-` speed (`0.25x`–`8x`), `R` restart, `P` pulse, `Esc` back.
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Diagnose Mode
 
@@ -88,7 +90,7 @@ Diagnose mode probes a single user-supplied target using bounded TCP connect tim
   - Safety limits enforced: single target, single port (`1-65535`), count capped at `200`, minimum interval `100 ms`, timeout `100-5000 ms`, and early abort after `3` consecutive non-loss errors (`refused`, `unreachable`, `dns_error`).
   - Nothing is saved to disk, no history is kept, and every run requires explicit confirmation.
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Reading the Metrics
 
@@ -98,7 +100,7 @@ Diagnose mode probes a single user-supplied target using bounded TCP connect tim
 - **Latency (`min`, `avg`, `max`, `p95`):** Total one-way travel time from send to delivery in `ms`. `p95` means 95% of delivered packets arrived in that time or less.
 - **Throughput (`kbps`):** Effective delivery rate in kilobits per second across the flow duration (`delivered bytes * 8 / duration_ms`).
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Privacy
 
@@ -110,7 +112,7 @@ Diagnose mode probes a single user-supplied target using bounded TCP connect tim
 
 Spongebob aims for maximum practical privacy rather than making an "absolute" privacy claim. See [PRIVACY.md](PRIVACY.md) for details.
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Scenarios
 
@@ -131,7 +133,7 @@ Built-in scenarios:
 
 Run from the CLI (`spongebob scenarios` to list, `spongebob run <file.toml | builtin-name> [--seed N]`) or load inside **Simulate**.
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Export
 
@@ -143,7 +145,7 @@ Both `spongebob run` and `spongebob diagnose` (and their UI result panels) suppo
 
 Exports are deterministic (no timestamps), atomic, never create missing parent folders, and refuse to overwrite existing files unless `--force` (or UI confirmation) is given. In Diagnose mode, the UI Export dialog suggests a file in your Downloads folder (`spongebob-diagnose-<target>.md`), shows the exact path first, and writes only after you press Save (or pass `--export-downloads` on the CLI). Diagnose reports include the target host you typed, so share them with care.
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Plugins
 
@@ -178,12 +180,14 @@ bg = "#000501"
 cream = "#cbf7bc"
 ```
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
 
 ## Roadmap
 
 - **Candidate:** Time-varying scenarios (impairments that change mid-run).
 
-<img src="assets/divider.svg" alt="" width="100%">
+<img src="assets/divider-live.svg" alt="" width="100%">
+
+<img src="assets/details.svg" alt="Subject: Computer Networks and Network Programming. Creator: Vinay Bandla (2520030437). Guide: S. Madhavi." width="100%">
 
 <img src="assets/footer.svg" alt="" width="100%">
