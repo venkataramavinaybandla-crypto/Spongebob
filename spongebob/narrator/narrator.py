@@ -2,9 +2,26 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 MASCOT_NAME = "Wobbles the Sea Cucumber"
+
+BANNED_NAMES: tuple[str, ...] = (
+    "spongebob",
+    "bikini bottom",
+    "krusty krab",
+    "patrick",
+    "squidward",
+    "sandy cheeks",
+    "plankton",
+    "mr. krabs",
+    "gary",
+    "finding nemo",
+    "dory",
+    "ariel",
+    "sebastian",
+    "flounder",
+)
 
 HEALTHY_POOL: tuple[str, ...] = (
     "Wiggle-tastic! Every packet glided through like a happy sea cucumber at {value}!",
@@ -210,8 +227,22 @@ class Line:
 class Narrator:
     """Rule-based mascot narrator with weighted selection and no-repeat session memory."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        extra_finding_pools: Mapping[tuple[str, str], Sequence[str]] | None = None,
+        extra_drop_pools: Mapping[str, Sequence[str]] | None = None,
+    ) -> None:
         self._used: dict[str, set[int]] = {}
+        self._extra_finding_pools: dict[tuple[str, str], tuple[str, ...]] = (
+            {k: tuple(v) for k, v in extra_finding_pools.items()}
+            if extra_finding_pools
+            else {}
+        )
+        self._extra_drop_pools: dict[str, tuple[str, ...]] = (
+            {k: tuple(v) for k, v in extra_drop_pools.items()}
+            if extra_drop_pools
+            else {}
+        )
 
     def reset(self) -> None:
         """Clear no-repeat memory for a fresh session."""
@@ -257,9 +288,11 @@ class Narrator:
                 severity = getattr(finding, "severity", "warn")
                 hop = getattr(finding, "hop", None)
                 value = getattr(finding, "value", 0.0)
-                pool = FINDING_POOLS.get((code, severity))
-                if pool is None:
+                base_pool = FINDING_POOLS.get((code, severity))
+                extra_pool = self._extra_finding_pools.get((code, severity), ())
+                if base_pool is None and not extra_pool:
                     continue
+                pool = tuple(base_pool or ()) + extra_pool
                 template = self._pick(f"{code}:{severity}", pool, rng)
                 hop_label = hop if hop is not None else "the path"
                 tone = "frantic" if severity == "critical" else "worried"
@@ -280,7 +313,7 @@ class Narrator:
                         key = (reason, getattr(ev, "hop", None))
                         drop_counts[key] = drop_counts.get(key, 0) + 1
             for (reason, hop), count in drop_counts.items():
-                pool = DROP_REASON_POOLS[reason]
+                pool = DROP_REASON_POOLS[reason] + self._extra_drop_pools.get(reason, ())
                 template = self._pick(f"drop:{reason}", pool, rng)
                 lines.append(
                     Line(

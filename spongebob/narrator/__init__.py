@@ -1,4 +1,5 @@
 from .narrator import (
+    BANNED_NAMES,
     DIAGNOSE_SUMMARY_POOL,
     MASCOT_NAME,
     DROP_REASON_POOLS,
@@ -11,6 +12,7 @@ from .narrator import (
 )
 
 __all__ = [
+    "BANNED_NAMES",
     "DIAGNOSE_SUMMARY_POOL",
     "DROP_REASON_POOLS",
     "FINDING_POOLS",

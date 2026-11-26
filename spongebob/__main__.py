@@ -8,6 +8,21 @@ from collections.abc import Sequence
 from spongebob import __version__
 
 
+def _add_export_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--export", default=None, help="Export report to .json, .csv, or .md")
+    parser.add_argument("--events", action="store_true", help="Include raw events in JSON export")
+    parser.add_argument(
+        "--no-narrator",
+        action="store_true",
+        help="Omit mascot lines from output and export",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing export file",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="spongebob",
@@ -17,6 +32,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--version",
         action="version",
         version=f"spongebob {__version__}",
+    )
+    parser.add_argument(
+        "--plugins",
+        default=None,
+        help="Explicitly load data-only plugins from this directory",
     )
     subparsers = parser.add_subparsers(dest="command")
     diag = subparsers.add_parser(
@@ -43,6 +63,28 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also probe system DNS resolution before TCP connect",
     )
+    diag.add_argument("--plugins", default=None, help="Explicitly load plugins from this directory")
+    _add_export_flags(diag)
+
+    run_p = subparsers.add_parser(
+        "run",
+        help="Run a scenario from a TOML file or built-in scenario name.",
+    )
+    run_p.add_argument("target", help="Path to a .toml scenario file or built-in scenario name")
+    run_p.add_argument("--seed", type=int, default=None, help="Override scenario RNG seed")
+    run_p.add_argument("--plugins", default=None, help="Explicitly load plugins from this directory")
+    _add_export_flags(run_p)
+
+    subparsers.add_parser(
+        "scenarios",
+        help="List built-in network impairment scenarios.",
+    )
+
+    plugins_p = subparsers.add_parser(
+        "plugins",
+        help="Validate and list data-only plugins inside a directory.",
+    )
+    plugins_p.add_argument("dir", help="Path to plugin folder or directory of plugin folders")
     return parser
 
 
@@ -55,7 +97,13 @@ def _run_diagnose(args: argparse.Namespace) -> int:
         validate_target,
     )
     from spongebob.meter import measure
-    from spongebob.narrator import MASCOT_NAME, narrate
+    from spongebob.narrator import MASCOT_NAME, Narrator
+    from spongebob.plugins import PluginRegistry, load_plugins_from_dir
+
+    plugins_dir = getattr(args, "plugins", None)
+    registry = load_plugins_from_dir(plugins_dir) if plugins_dir else PluginRegistry()
+    for pname, err in registry.errors:
+        print(f"Skipped plugin {pname}: {err}", file=sys.stderr)
 
     try:
         host = validate_target(args.host, "host")
@@ -92,7 +140,11 @@ def _run_diagnose(args: argparse.Namespace) -> int:
     adapted = samples_to_events(results)
     metrics = measure(adapted.events, packet_size_bytes=adapted.size_bytes)
     findings = analyze(adapted.events, adapted.path, latency_kind=adapted.latency_kind)
-    lines = narrate(findings, metrics, adapted.events, mode="diagnose")
+    narrator_inst = Narrator(
+        extra_finding_pools=registry.finding_jokes or None,
+        extra_drop_pools=registry.drop_jokes or None,
+    )
+    lines = narrator_inst.narrate(findings, metrics, adapted.events, mode="diagnose")
 
     print(
         f"sent={metrics.sent} delivered={metrics.delivered} lost={metrics.lost} "
@@ -125,14 +177,162 @@ def _run_diagnose(args: argparse.Namespace) -> int:
     else:
         print("Findings: none")
 
-    for line in lines:
-        print(f"[{MASCOT_NAME}] {line.text}")
+    if not getattr(args, "no_narrator", False):
+        for line in lines:
+            print(f"[{MASCOT_NAME}] {line.text}")
 
     if adapted.errors:
         for seg, err_samples in adapted.errors.items():
             outcomes = ", ".join(sorted({s.outcome for s in err_samples}))
             print(f"Errors on {seg}: {len(err_samples)} ({outcomes})")
 
+    if getattr(args, "export", None):
+        from spongebob.export import ExportPayload, export_report
+
+        payload = ExportPayload(
+            source="diagnose",
+            metrics=metrics,
+            findings=findings,
+            events=adapted.events,
+            narrator_lines=tuple(lines),
+            latency_kind="rtt",
+            target_host=host,
+            target_port=port,
+            include_events=bool(args.events),
+            include_narrator=not bool(args.no_narrator),
+        )
+        try:
+            out_path = export_report(payload, args.export, force=bool(args.force))
+        except (ValueError, FileNotFoundError, FileExistsError, OSError) as exc:
+            print(f"Export failed: {exc}", file=sys.stderr)
+            return 2
+        print(f"Exported report to {out_path}")
+
+    return 0
+
+
+def _run_scenario_cmd(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from spongebob.narrator import MASCOT_NAME, Narrator
+    from spongebob.plugins import PluginRegistry, load_plugins_from_dir
+    from spongebob.scenarios import load_builtin_scenario, load_scenario, run_scenario
+
+    plugins_dir = getattr(args, "plugins", None)
+    registry = load_plugins_from_dir(plugins_dir) if plugins_dir else PluginRegistry()
+    for pname, err in registry.errors:
+        print(f"Skipped plugin {pname}: {err}", file=sys.stderr)
+
+    target = args.target
+    target_path = Path(target)
+    try:
+        if target_path.is_file():
+            scenario = load_scenario(target_path)
+        elif target in registry.scenarios:
+            scenario = registry.scenarios[target]
+        elif target.endswith(".toml") or "\\" in target:
+            scenario = load_scenario(target_path)
+        else:
+            scenario = load_builtin_scenario(target)
+    except (FileNotFoundError, ValueError, TypeError) as exc:
+        print(f"Error loading scenario: {exc}", file=sys.stderr)
+        return 2
+
+    res = run_scenario(scenario, seed=args.seed)
+    narrator_inst = Narrator(
+        extra_finding_pools=registry.finding_jokes or None,
+        extra_drop_pools=registry.drop_jokes or None,
+    )
+    narrator_lines = narrator_inst.narrate(
+        res.findings, res.metrics, res.events, seed=(scenario.seed if args.seed is None else args.seed)
+    )
+    m = res.metrics
+
+    print(f"Scenario: {scenario.name}")
+    print(f"Description: {scenario.description}")
+    print(
+        f"sent={m.sent} delivered={m.delivered} lost={m.lost} "
+        f"loss_pct={m.loss_pct:.1f}%"
+    )
+    if m.latency_ms is not None:
+        print(
+            f"latency_ms: min={m.latency_ms.min:.2f} avg={m.latency_ms.avg:.2f} "
+            f"max={m.latency_ms.max:.2f} p95={m.latency_ms.p95:.2f}"
+        )
+    else:
+        print("latency_ms: n/a")
+
+    jitter_str = f"{m.jitter_ms:.2f}" if m.jitter_ms is not None else "n/a"
+    tp_str = f"{m.throughput_kbps:.2f} kbps" if m.throughput_kbps is not None else "n/a"
+    print(f"jitter_ms={jitter_str} reordered={m.reordered} throughput={tp_str}")
+
+    if res.findings:
+        for finding in res.findings:
+            hop_label = finding.hop if finding.hop is not None else "path"
+            print(
+                f"[{finding.severity.upper()}] {finding.code} hop={hop_label} "
+                f"value={finding.value:.2f} (threshold={finding.threshold:.2f})"
+            )
+    else:
+        print("Findings: none")
+
+    if not getattr(args, "no_narrator", False):
+        for line in narrator_lines:
+            print(f"[{MASCOT_NAME}] {line.text}")
+
+    if getattr(args, "export", None):
+        from spongebob.export import ExportPayload, export_report
+
+        payload = ExportPayload(
+            source="simulation",
+            metrics=res.metrics,
+            findings=res.findings,
+            events=res.events,
+            narrator_lines=tuple(narrator_lines),
+            scenario=scenario,
+            latency_kind="one_way",
+            include_events=bool(args.events),
+            include_narrator=not bool(args.no_narrator),
+        )
+        try:
+            out_path = export_report(payload, args.export, force=bool(args.force))
+        except (ValueError, FileNotFoundError, FileExistsError, OSError) as exc:
+            print(f"Export failed: {exc}", file=sys.stderr)
+            return 2
+        print(f"Exported report to {out_path}")
+
+    return 0
+
+
+def _list_scenarios_cmd() -> int:
+    from spongebob.scenarios import list_builtin_scenarios, load_builtin_scenario
+
+    for name in list_builtin_scenarios():
+        sc = load_builtin_scenario(name)
+        print(f"{name:<20} {sc.name} — {sc.description}")
+    return 0
+
+
+def _plugins_cmd(args: argparse.Namespace) -> int:
+    from spongebob.plugins import load_plugins_from_dir
+
+    registry = load_plugins_from_dir(args.dir)
+    for plugin in registry.plugins:
+        m = plugin.manifest
+        if m.kind == "scenarios":
+            count = len(plugin.scenarios)
+            detail = f"{count} scenarios"
+        elif m.kind == "jokes":
+            count = sum(len(v) for v in plugin.finding_jokes.values()) + sum(
+                len(v) for v in plugin.drop_jokes.values()
+            )
+            detail = f"{count} joke lines"
+        else:
+            count = len(plugin.theme_colors)
+            detail = f"{count} color roles"
+        print(f"{m.name} ({m.version}) [{m.kind}] - {detail}: {m.description}")
+    for pname, err in registry.errors:
+        print(f"ERROR {pname}: {err}", file=sys.stderr)
     return 0
 
 
@@ -143,10 +343,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "diagnose":
         return _run_diagnose(args)
+    if args.command == "run":
+        return _run_scenario_cmd(args)
+    if args.command == "scenarios":
+        return _list_scenarios_cmd()
+    if args.command == "plugins":
+        return _plugins_cmd(args)
 
     from spongebob.ui.app import SimulatorApp
 
-    SimulatorApp().run()
+    SimulatorApp(plugins_dir=args.plugins).run()
     return 0
 
 
