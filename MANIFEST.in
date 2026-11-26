@@ -1,0 +1,12 @@
+include PYPI_README.md
+include PRIVACY.md
+recursive-include spongebob/scenarios/builtin *.toml
+prune Pre-requirements
+exclude agents.md
+exclude architecture.json
+exclude memory.md
+exclude context.md
+exclude workflows.md
+exclude persona_maaaaa.txt
+exclude king.json
+exclude tiger.md

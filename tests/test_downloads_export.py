@@ -146,7 +146,7 @@ async def test_ui_diagnose_export_modal_prefill_esc_and_edited_save(
 def test_cli_diagnose_export_downloads_and_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert __version__ == "0.3.1"
+    assert __version__ == "0.3.2"
     dl = tmp_path / "Downloads"
     dl.mkdir()
     monkeypatch.setattr("spongebob.export.exporter.get_downloads_dir", lambda: dl)

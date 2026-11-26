@@ -1,0 +1,101 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run pytest
+        run: pytest
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify tag matches pyproject version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          python - <<'EOF'
+          import os, pathlib, tomllib
+
+          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          expected = "v" + data["project"]["version"]
+          actual = os.environ["TAG_NAME"]
+          if actual != expected:
+              raise SystemExit(f"Tag {actual!r} does not match pyproject version {expected!r}")
+          print(f"Tag check passed: {actual}")
+          EOF
+      - name: Install build and twine
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+      - name: Build sdist and wheel
+        run: python -m build
+      - name: Check distributions with twine
+        run: twine check dist/*
+      - name: Verify no private files in distributions
+        run: |
+          python - <<'EOF'
+          import pathlib, tarfile, zipfile
+
+          forbidden = (
+              "agents.md",
+              "architecture.json",
+              "memory.md",
+              "context.md",
+              "workflows.md",
+              "persona_maaaaa.txt",
+              "Pre-requirements",
+          )
+          dist = pathlib.Path("dist")
+          for item in dist.iterdir():
+              if item.suffix == ".whl":
+                  with zipfile.ZipFile(item) as zf:
+                      names = zf.namelist()
+              elif item.name.endswith(".tar.gz"):
+                  with tarfile.open(item, "r:gz") as tf:
+                      names = tf.getnames()
+              else:
+                  continue
+              for name in names:
+                  for bad in forbidden:
+                      if bad in name:
+                          raise SystemExit(f"Forbidden entry {name!r} in {item.name}")
+          print("Distribution privacy check passed.")
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/spongebob-cli
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

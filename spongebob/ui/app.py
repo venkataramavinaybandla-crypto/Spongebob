@@ -22,7 +22,7 @@ class SimulatorApp(App[None]):
     """Terminal UI application for Spongebob (Network Impairment Simulator)."""
 
     TITLE = "Spongebob"
-    SUB_TITLE = "Network Impairment Simulator (v0.3.1)"
+    SUB_TITLE = "Network Impairment Simulator (v0.3.2)"
     CSS = theme.BASE_THEME_CSS
 
     def __init__(self, plugins_dir: str | Path | None = None) -> None:

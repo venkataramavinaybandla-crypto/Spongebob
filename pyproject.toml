@@ -3,11 +3,18 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spongebob"
-version = "0.3.1"
-description = "Spongebob — Network Impairment Simulator for delay, jitter, and packet loss."
-readme = "README.md"
+name = "spongebob-cli"
+version = "0.3.2"
+description = "Spongebob — Terminal Network Impairment Simulator for delay, jitter, and packet loss."
+readme = "PYPI_README.md"
 requires-python = ">=3.11"
+authors = [{name = "Vinay Bandla"}]
+keywords = ["network", "simulator", "delay", "jitter", "packet-loss", "terminal", "tui"]
+classifiers = [
+    "Environment :: Console",
+    "Topic :: System :: Networking",
+    "Programming Language :: Python :: 3",
+]
 dependencies = [
     "textual==8.2.8",
 ]
@@ -16,6 +23,11 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/venkataramavinaybandla-crypto/Spongebob"
+Repository = "https://github.com/venkataramavinaybandla-crypto/Spongebob"
+Issues = "https://github.com/venkataramavinaybandla-crypto/Spongebob/issues"
 
 [project.scripts]
 spongebob = "spongebob.__main__:main"

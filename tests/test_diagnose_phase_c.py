@@ -18,7 +18,7 @@ from spongebob.ui.visualize_screen import VisualizeScreen
 async def test_menu_diagnose_enabled_and_opens_screen() -> None:
     app = SimulatorApp()
     async with app.run_test(size=(100, 40)) as pilot:
-        assert __version__ == "0.3.1"
+        assert __version__ == "0.3.2"
         assert isinstance(app.screen, MenuScreen)
         btn = app.screen.query_one("#btn-diagnose", Button)
         assert btn.disabled is False
