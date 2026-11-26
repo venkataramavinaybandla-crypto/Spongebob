@@ -21,7 +21,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0",
+    "pytest-asyncio>=1.5.0,<2",
+]
+test = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.5.0,<2",
 ]
 
 [project.urls]
